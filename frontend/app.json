@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Igreja Escala",
+    "slug": "igreja-escala",
+    "version": "0.1.0",
+    "scheme": "igreja-escala",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.igrejaescala.app"
+    },
+    "android": {
+      "package": "com.igrejaescala.app",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FAF9F7",
+          "dark": {
+            "backgroundColor": "#0F0E0D"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ca54c983-9628-44fd-be9b-59cb57798a81"
+      }
+    }
+  }
+}
