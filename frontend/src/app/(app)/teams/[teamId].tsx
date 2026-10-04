@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { ActivityIndicator, Button, FAB, Snackbar, TextInput } from 'react-native-paper';
 import { SelectField } from '@/components/form';
@@ -72,6 +72,14 @@ export default function TeamDetailScreen() {
       setLoading(false);
     }
   }, [currentChurch, teamId, navigation]);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -307,6 +315,9 @@ export default function TeamDetailScreen() {
           placeholder="Vocal, baixo, fotógrafo..."
           value={roleName}
           onChangeText={setRoleName}
+          autoFocus
+          returnKeyType="done"
+          onSubmitEditing={handleAddRole}
         />
         <TextInput
           mode="outlined"

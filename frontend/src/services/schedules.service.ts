@@ -19,16 +19,35 @@ export const schedulesService = {
     return data;
   },
 
-  async confirm(churchId: ID, scheduleId: ID): Promise<Schedule> {
+  /** Member asking out of their own slot; the reason is required by the API. */
+  async requestRelease(churchId: ID, scheduleId: ID, reason: string): Promise<Schedule> {
     const { data } = await http.post<Schedule>(
-      `/churches/${churchId}/schedules/${scheduleId}/confirm`,
+      `/churches/${churchId}/schedules/${scheduleId}/release-request`,
+      { reason },
     );
     return data;
   },
 
-  async decline(churchId: ID, scheduleId: ID): Promise<Schedule> {
+  /** Leader agrees: the slot opens and the engine picks a replacement. */
+  async approveRelease(churchId: ID, scheduleId: ID): Promise<Schedule> {
     const { data } = await http.post<Schedule>(
-      `/churches/${churchId}/schedules/${scheduleId}/decline`,
+      `/churches/${churchId}/schedules/${scheduleId}/release-request/approve`,
+    );
+    return data;
+  },
+
+  async rejectRelease(churchId: ID, scheduleId: ID): Promise<Schedule> {
+    const { data } = await http.post<Schedule>(
+      `/churches/${churchId}/schedules/${scheduleId}/release-request/reject`,
+    );
+    return data;
+  },
+
+  /** Leader removing someone directly, without a request from them. */
+  async releaseByLeader(churchId: ID, scheduleId: ID, reason?: string): Promise<Schedule> {
+    const { data } = await http.post<Schedule>(
+      `/churches/${churchId}/schedules/${scheduleId}/release`,
+      { reason },
     );
     return data;
   },

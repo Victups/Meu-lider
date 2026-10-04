@@ -1,4 +1,4 @@
-import type { Church, CreateChurchInput, ID } from '@/types';
+import type { Church, CreateChurchInput, ID, UpdateChurchInput } from '@/types';
 import { http } from './http/client';
 
 export const churchesService = {
@@ -17,7 +17,7 @@ export const churchesService = {
     return data;
   },
 
-  async update(churchId: ID, input: Partial<CreateChurchInput>): Promise<Church> {
+  async update(churchId: ID, input: UpdateChurchInput): Promise<Church> {
     const { data } = await http.put<Church>(`/churches/${churchId}`, input);
     return data;
   },

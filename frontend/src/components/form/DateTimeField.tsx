@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Button } from 'react-native-paper';
 import { addDays, format, isSameDay, nextSunday, nextWednesday, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Ionicons } from '@expo/vector-icons';
+import { Sheet } from '@/components/ui';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
 
@@ -12,7 +14,6 @@ interface DateTimeFieldProps {
   value: Date;
   onChange: (next: Date) => void;
   minimumDate?: Date;
-  /** Hide the quick shortcuts when the field is an end date. */
   shortcuts?: boolean;
 }
 
@@ -27,7 +28,6 @@ function quickDates(from: Date) {
   ];
 }
 
-/** Keeps the time of `value` while moving it to another day. */
 function withDate(value: Date, day: Date): Date {
   const merged = new Date(day);
   merged.setHours(value.getHours(), value.getMinutes(), 0, 0);
@@ -42,7 +42,7 @@ export function DateTimeField({
   shortcuts = true,
 }: DateTimeFieldProps) {
   const theme = useAppTheme();
-  const [picker, setPicker] = useState<'date' | 'time' | null>(null);
+  const [sheet, setSheet] = useState<'date' | 'time' | null>(null);
 
   if (Platform.OS === 'web') {
     return (
@@ -70,23 +70,6 @@ export function DateTimeField({
     );
   }
 
-  const handlePicked = (selected: Date) => {
-    const mode = picker;
-    // Android shows a one-shot dialog; iOS keeps the inline picker mounted.
-    if (Platform.OS === 'android') setPicker(null);
-
-    if (mode === 'date') {
-      onChange(withDate(value, selected));
-      return;
-    }
-
-    const merged = new Date(value);
-    merged.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-    onChange(merged);
-  };
-
-  const options = quickDates(minimumDate ?? new Date());
-
   return (
     <View style={styles.block}>
       <Text style={[styles.label, { color: theme.app.textMuted }]}>{label}</Text>
@@ -97,7 +80,7 @@ export function DateTimeField({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.shortcuts}
         >
-          {options.map((option) => {
+          {quickDates(minimumDate ?? new Date()).map((option) => {
             const active = isSameDay(option.date, value);
             return (
               <Pressable
@@ -127,7 +110,7 @@ export function DateTimeField({
 
       <View style={styles.row}>
         <Pressable
-          onPress={() => setPicker(picker === 'date' ? null : 'date')}
+          onPress={() => setSheet('date')}
           style={[
             styles.trigger,
             styles.triggerDate,
@@ -141,7 +124,7 @@ export function DateTimeField({
         </Pressable>
 
         <Pressable
-          onPress={() => setPicker(picker === 'time' ? null : 'time')}
+          onPress={() => setSheet('time')}
           style={[
             styles.trigger,
             { borderColor: theme.app.borderStrong, backgroundColor: theme.app.surface },
@@ -152,21 +135,43 @@ export function DateTimeField({
         </Pressable>
       </View>
 
-      {picker ? (
+      {/* In a sheet, not inline: an inline picker pushes the rest of the form
+          down and has nowhere to close, which made long forms unusable. */}
+      <Sheet
+        visible={sheet !== null}
+        onDismiss={() => setSheet(null)}
+        title={sheet === 'time' ? 'Horário' : 'Data'}
+        subtitle={format(value, "EEEE, d 'de' MMMM 'às' HH'h'mm", { locale: ptBR })}
+        footer={
+          <Button mode="contained" onPress={() => setSheet(null)} style={styles.done}>
+            Pronto
+          </Button>
+        }
+      >
         <View style={styles.pickerHost}>
           <DateTimePicker
             value={value}
-            mode={picker}
-            // Inline shows the full month grid on iOS — far easier to move
-            // across dates than the scrolling wheel.
-            display={Platform.OS === 'ios' ? (picker === 'date' ? 'inline' : 'spinner') : 'default'}
-            minimumDate={picker === 'date' ? minimumDate : undefined}
+            mode={sheet === 'time' ? 'time' : 'date'}
+            display={Platform.OS === 'ios' ? (sheet === 'time' ? 'spinner' : 'inline') : 'default'}
+            minimumDate={sheet === 'date' ? minimumDate : undefined}
             locale="pt-BR"
-            onValueChange={(_event, selected) => handlePicked(selected)}
-            onDismiss={() => setPicker(null)}
+            onValueChange={(_event, selected) => {
+              if (sheet === 'date') {
+                onChange(withDate(value, selected));
+                // Android's dialog closes itself; keep the sheet in step.
+                if (Platform.OS === 'android') setSheet(null);
+                return;
+              }
+
+              const merged = new Date(value);
+              merged.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+              onChange(merged);
+              if (Platform.OS === 'android') setSheet(null);
+            }}
+            onDismiss={() => setSheet(null)}
           />
         </View>
-      ) : null}
+      </Sheet>
     </View>
   );
 }
@@ -194,5 +199,6 @@ const styles = StyleSheet.create({
   },
   triggerDate: { flex: 1 },
   value: { fontFamily: fontFamily.body, fontSize: fontSize.md },
-  pickerHost: { alignItems: 'center' },
+  pickerHost: { alignItems: 'center', minHeight: 120 },
+  done: { flex: 1, borderRadius: radius.md },
 });

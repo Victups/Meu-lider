@@ -280,7 +280,8 @@ function nthWeekdayOfMonth(
     return new Date(year, month, lastDayOfMonth.getDate() - backwardOffset);
   }
 
-  const forwardOffset = (weekday - new Date(year, month, 1).getDay() + DAYS_PER_WEEK) % DAYS_PER_WEEK;
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const forwardOffset = (weekday - firstWeekday + DAYS_PER_WEEK) % DAYS_PER_WEEK;
   const dayOfMonth = 1 + forwardOffset + (position - 1) * DAYS_PER_WEEK;
   const candidate = new Date(year, month, dayOfMonth);
 

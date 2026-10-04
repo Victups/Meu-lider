@@ -220,7 +220,7 @@ export class ScheduleSwapsService implements IScheduleSwapsService {
     await this.dataSource.transaction(async (manager) => {
       await manager.update(Schedule, swap.scheduleId, {
         memberId: newMemberId,
-        status: ScheduleStatus.PENDING,
+        status: ScheduleStatus.SCHEDULED,
         confirmedAt: null,
         confirmedById: null,
       });
@@ -233,7 +233,7 @@ export class ScheduleSwapsService implements IScheduleSwapsService {
     });
 
     swap.schedule.memberId = newMemberId;
-    swap.schedule.status = ScheduleStatus.PENDING;
+    swap.schedule.status = ScheduleStatus.SCHEDULED;
     swap.schedule.confirmedAt = null;
     swap.schedule.confirmedById = null;
     swap.status = SwapStatus.ACCEPTED;

@@ -7,14 +7,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
-import type { UserRole } from '@/types';
-
-const ROLE_LABEL: Record<UserRole, string> = {
-  SUPER_ADMIN: 'Administrador geral',
-  CHURCH_ADMIN: 'Administrador da igreja',
-  LEADER: 'Líder de equipe',
-  MEMBER: 'Membro',
-};
+import { USER_ROLE_LABEL } from '@/types';
 
 export default function ProfileScreen() {
   const theme = useAppTheme();
@@ -45,7 +38,7 @@ export default function ProfileScreen() {
           <Text style={[styles.email, { color: theme.app.textMuted }]}>{user?.email}</Text>
           {user ? (
             <Text style={[styles.role, { color: theme.colors.primary }]}>
-              {ROLE_LABEL[user.role]}
+              {USER_ROLE_LABEL[user.role]}
             </Text>
           ) : null}
         </View>
@@ -56,8 +49,10 @@ export default function ProfileScreen() {
           <List.Subheader>Igreja</List.Subheader>
           <List.Item
             title={currentChurch.name}
-            description={currentChurch.description ?? undefined}
+            description={currentChurch.description ?? 'Ver e editar os dados da igreja'}
             left={(props) => <List.Icon {...props} icon="church" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => router.push('/church-settings')}
           />
         </List.Section>
       ) : null}

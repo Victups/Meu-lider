@@ -3,23 +3,24 @@ import { Button } from 'react-native-paper';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, StatusBadge } from '../ui';
-import { fontFamily, fontSize, spacing } from '../../theme';
+import { fontFamily, fontSize, radius, spacing } from '../../theme';
 import { useAppTheme } from '../../theme/use-app-theme';
 import type { Schedule } from '../../types';
 
 interface ScheduleCardProps {
   schedule: Schedule;
-  onConfirm?: () => void;
-  onDecline?: () => void;
+  /** Offered only while the member still holds the slot. */
+  onRequestRelease?: () => void;
   busy?: boolean;
 }
 
-export function ScheduleCard({ schedule, onConfirm, onDecline, busy }: ScheduleCardProps) {
+export function ScheduleCard({ schedule, onRequestRelease, busy }: ScheduleCardProps) {
   const theme = useAppTheme();
-  const { event, team, teamRole, status } = schedule;
+  const { event, team, teamRole, status, releaseReason } = schedule;
 
   const eventDate = event ? new Date(event.eventDate) : null;
-  const awaitingAnswer = status === 'PENDING' && (onConfirm || onDecline);
+  const holdsSlot = status === 'SCHEDULED' || status === 'CONFIRMED';
+  const awaitingLeader = status === 'RELEASE_REQUESTED';
 
   return (
     <Card accentColor={team?.color}>
@@ -46,15 +47,29 @@ export function ScheduleCard({ schedule, onConfirm, onDecline, busy }: ScheduleC
         </Text>
       </View>
 
-      {awaitingAnswer ? (
-        <View style={styles.actions}>
-          <Button mode="contained" onPress={onConfirm} disabled={busy} style={styles.action}>
-            Confirmar
-          </Button>
-          <Button mode="outlined" onPress={onDecline} disabled={busy} style={styles.action}>
-            Não posso
-          </Button>
+      {awaitingLeader ? (
+        <View style={[styles.notice, { backgroundColor: theme.app.status.RELEASE_REQUESTED.bg }]}>
+          <Text style={[styles.noticeText, { color: theme.app.status.RELEASE_REQUESTED.fg }]}>
+            Aguardando a liderança liberar. Até lá, você segue escalado.
+          </Text>
+          {releaseReason ? (
+            <Text style={[styles.noticeReason, { color: theme.app.status.RELEASE_REQUESTED.fg }]}>
+              “{releaseReason}”
+            </Text>
+          ) : null}
         </View>
+      ) : null}
+
+      {holdsSlot && onRequestRelease ? (
+        <Button
+          mode="outlined"
+          onPress={onRequestRelease}
+          disabled={busy}
+          style={styles.action}
+          icon="calendar-remove-outline"
+        >
+          Não vou poder
+        </Button>
       ) : null}
     </Card>
   );
@@ -75,6 +90,8 @@ const styles = StyleSheet.create({
   },
   roleLabel: { fontFamily: fontFamily.body, fontSize: fontSize.sm },
   roleValue: { fontFamily: fontFamily.bodyBold, fontSize: fontSize.sm },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  action: { flex: 1 },
+  notice: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.sm, gap: 2 },
+  noticeText: { fontFamily: fontFamily.bodyMedium, fontSize: fontSize.xs, lineHeight: 18 },
+  noticeReason: { fontFamily: fontFamily.body, fontSize: fontSize.xs, fontStyle: 'italic' },
+  action: { marginTop: spacing.lg, borderRadius: radius.md },
 });

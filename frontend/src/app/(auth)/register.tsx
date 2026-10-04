@@ -1,5 +1,12 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  type TextInput as RNTextInput,
+} from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Button, HelperText, Snackbar, TextInput } from 'react-native-paper';
 import { Screen } from '@/components/ui';
@@ -14,6 +21,11 @@ export default function RegisterScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const signUp = useAuthStore((s) => s.signUp);
+
+  const emailRef = useRef<RNTextInput>(null);
+  const churchRef = useRef<RNTextInput>(null);
+  const passwordRef = useRef<RNTextInput>(null);
+  const confirmRef = useRef<RNTextInput>(null);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -67,11 +79,16 @@ export default function RegisterScreen() {
             label="Nome completo"
             value={name}
             onChangeText={setName}
+            autoFocus
             autoComplete="name"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => emailRef.current?.focus()}
             left={<TextInput.Icon icon="account-outline" />}
           />
 
           <TextInput
+            ref={emailRef}
             mode="outlined"
             label="E-mail"
             value={email}
@@ -79,16 +96,23 @@ export default function RegisterScreen() {
             autoCapitalize="none"
             keyboardType="email-address"
             autoComplete="email"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => churchRef.current?.focus()}
             left={<TextInput.Icon icon="email-outline" />}
           />
 
           <TextInput
+            ref={churchRef}
             mode="outlined"
             label="Código da igreja"
             value={churchId}
             onChangeText={setChurchId}
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => passwordRef.current?.focus()}
             left={<TextInput.Icon icon="church" />}
           />
           <HelperText type="info" visible>
@@ -96,12 +120,16 @@ export default function RegisterScreen() {
           </HelperText>
 
           <TextInput
+            ref={passwordRef}
             mode="outlined"
             label="Senha"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
             autoComplete="new-password"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => confirmRef.current?.focus()}
             left={<TextInput.Icon icon="lock-outline" />}
           />
           <HelperText type={passwordTooShort ? 'error' : 'info'} visible>
@@ -109,12 +137,15 @@ export default function RegisterScreen() {
           </HelperText>
 
           <TextInput
+            ref={confirmRef}
             mode="outlined"
             label="Confirmar senha"
             value={confirmation}
             onChangeText={setConfirmation}
             secureTextEntry
             error={mismatch}
+            returnKeyType="go"
+            onSubmitEditing={() => canSubmit && handleSubmit()}
             left={<TextInput.Icon icon="lock-check-outline" />}
           />
           <HelperText type="error" visible={mismatch}>

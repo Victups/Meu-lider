@@ -77,7 +77,8 @@ export const lightTheme: AppTheme = {
     textSubtle: palette.sand[400],
     accent: palette.amber[500],
     status: {
-      PENDING: { fg: palette.amber[700], bg: palette.amber[100] },
+      SCHEDULED: { fg: palette.indigo[700], bg: palette.indigo[50] },
+      RELEASE_REQUESTED: { fg: palette.amber[700], bg: palette.amber[100] },
       CONFIRMED: { fg: palette.green[700], bg: palette.green[100] },
       CANCELLED: { fg: palette.red[700], bg: palette.red[100] },
       NO_SHOW: { fg: palette.sand[700], bg: palette.sand[200] },
@@ -123,7 +124,8 @@ export const darkTheme: AppTheme = {
     textSubtle: palette.sand[500],
     accent: palette.amber[300],
     status: {
-      PENDING: { fg: palette.amber[200], bg: palette.amber[800] },
+      SCHEDULED: { fg: palette.indigo[100], bg: palette.indigo[800] },
+      RELEASE_REQUESTED: { fg: palette.amber[200], bg: palette.amber[800] },
       CONFIRMED: { fg: palette.green[300], bg: palette.green[700] },
       CANCELLED: { fg: palette.red[300], bg: palette.red[700] },
       NO_SHOW: { fg: palette.sand[300], bg: palette.sand[700] },

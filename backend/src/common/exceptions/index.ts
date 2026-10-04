@@ -9,6 +9,7 @@ export * from './insufficient-permission.exception';
 export * from './invalid-credentials.exception';
 export * from './invalid-recurrence-rule.exception';
 export * from './invalid-refresh-token.exception';
+export * from './invalid-schedule-transition.exception';
 export * from './invalid-swap-candidate.exception';
 export * from './member-unavailable.exception';
 export * from './resource-not-found.exception';

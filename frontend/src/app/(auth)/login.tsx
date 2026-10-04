@@ -1,5 +1,12 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  type TextInput as RNTextInput,
+} from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, HelperText, Snackbar, TextInput } from 'react-native-paper';
@@ -13,6 +20,8 @@ export default function LoginScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const signIn = useAuthStore((s) => s.signIn);
+
+  const passwordRef = useRef<RNTextInput>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -58,6 +67,9 @@ export default function LoginScreen() {
             autoCapitalize="none"
             autoComplete="email"
             keyboardType="email-address"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => passwordRef.current?.focus()}
             left={<TextInput.Icon icon="email-outline" />}
           />
           <HelperText type="error" visible={!emailLooksValid}>
@@ -65,12 +77,15 @@ export default function LoginScreen() {
           </HelperText>
 
           <TextInput
+            ref={passwordRef}
             mode="outlined"
             label="Senha"
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
             autoComplete="current-password"
+            returnKeyType="go"
+            onSubmitEditing={() => canSubmit && handleSubmit()}
             left={<TextInput.Icon icon="lock-outline" />}
             right={
               <TextInput.Icon

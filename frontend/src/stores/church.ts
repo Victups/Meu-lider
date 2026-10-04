@@ -8,6 +8,8 @@ interface ChurchState {
   isLoading: boolean;
   loadChurches: () => Promise<void>;
   selectChurch: (church: Church) => void;
+  /** Keeps every screen holding a copy of this church in sync after an edit. */
+  replaceChurch: (church: Church) => void;
 }
 
 export const useChurchStore = create<ChurchState>((set, get) => ({
@@ -32,4 +34,10 @@ export const useChurchStore = create<ChurchState>((set, get) => ({
   },
 
   selectChurch: (church) => set({ currentChurch: church }),
+
+  replaceChurch: (church) =>
+    set((state) => ({
+      churches: state.churches.map((entry) => (entry.id === church.id ? church : entry)),
+      currentChurch: state.currentChurch?.id === church.id ? church : state.currentChurch,
+    })),
 }));

@@ -6,7 +6,11 @@ import { Member } from '../../members/entities/member.entity';
 import { User } from '../../users/entities/user.entity';
 
 export enum ScheduleStatus {
-  PENDING = 'PENDING',
+  /** Assigned and expected to serve. No acceptance needed. */
+  SCHEDULED = 'SCHEDULED',
+  /** Member asked to be released; stays on the roster until a leader rules. */
+  RELEASE_REQUESTED = 'RELEASE_REQUESTED',
+  /** Taken over from someone else, so the new holder did accept it. */
   CONFIRMED = 'CONFIRMED',
   CANCELLED = 'CANCELLED',
   NO_SHOW = 'NO_SHOW',
@@ -30,8 +34,15 @@ export class Schedule {
   @Column({ type: 'uuid', nullable: false })
   teamRoleId: string;
 
-  @Column({ type: 'enum', enum: ScheduleStatus, default: ScheduleStatus.PENDING })
+  @Column({ type: 'enum', enum: ScheduleStatus, default: ScheduleStatus.SCHEDULED })
   status: ScheduleStatus;
+
+  /** Why the member asked out. Required when requesting a release. */
+  @Column({ type: 'text', nullable: true })
+  releaseReason: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  releaseRequestedAt: Date | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   confirmedAt: Date | null;

@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { authService } from '@/services';
-import { hasAtLeastRole, type LoginInput, type RegisterInput, type User } from '@/types';
+import {
+  canManageChurch,
+  canManageSomeTeam,
+  canSeeAllRosters,
+  type LoginInput,
+  type RegisterInput,
+  type User,
+} from '@/types';
 
 interface AuthState {
   user: User | null;
@@ -11,7 +18,10 @@ interface AuthState {
   signUp: (input: RegisterInput) => Promise<void>;
   signOut: () => Promise<void>;
   isAdmin: () => boolean;
+  /** Can reach team management; the API still checks the specific team. */
   canManageTeams: () => boolean;
+  /** Pastors and presbyters read every roster without editing. */
+  canSeeEverything: () => boolean;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -46,11 +56,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   isAdmin: () => {
     const { user } = get();
-    return user ? hasAtLeastRole(user.role, 'CHURCH_ADMIN') : false;
+    return user ? canManageChurch(user.role) : false;
   },
 
   canManageTeams: () => {
     const { user } = get();
-    return user ? hasAtLeastRole(user.role, 'LEADER') : false;
+    return user ? canManageSomeTeam(user.role) : false;
+  },
+
+  canSeeEverything: () => {
+    const { user } = get();
+    return user ? canSeeAllRosters(user.role) : false;
   },
 }));

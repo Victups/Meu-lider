@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ResourceType } from '../../common/constants';
+import { CHURCH_MANAGER_ROLES, ResourceType } from '../../common/constants';
 import {
   ChurchAccessDeniedException,
   ChurchSlugAlreadyExistsException,
@@ -73,6 +73,13 @@ export class ChurchesService implements IChurchesService {
 
     if (user.role !== UserRole.SUPER_ADMIN && user.churchId !== id) {
       throw new ChurchAccessDeniedException(id);
+    }
+
+    // Belonging to the church is not enough to rename it.
+    if (!CHURCH_MANAGER_ROLES.includes(user.role)) {
+      throw new InsufficientPermissionException(
+        'Apenas administradores podem alterar os dados da igreja',
+      );
     }
 
     if (updateData.slug && updateData.slug !== church.slug) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ActivityIndicator, Button, IconButton, Snackbar, TextInput } from 'react-native-paper';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -70,6 +70,14 @@ export default function AvailabilityScreen() {
       setLoading(false);
     }
   }, [member]);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     load();
@@ -312,6 +320,8 @@ export default function AvailabilityScreen() {
           placeholder="Viagem, trabalho..."
           value={reason}
           onChangeText={setReason}
+          returnKeyType="done"
+          onSubmitEditing={handleCreateAbsence}
         />
       </Sheet>
 

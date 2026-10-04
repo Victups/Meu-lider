@@ -36,3 +36,16 @@ export interface CreateEventInput {
   location?: string;
   recurrenceRule?: string;
 }
+
+/** Result of asking what a recurrence rule would generate. */
+export interface OccurrencesPreview {
+  eventId: ID;
+  recurrenceRule: string | null;
+  dates: ISODateString[];
+}
+
+export interface MaterializeResult {
+  createdCount: number;
+  skippedCount: number;
+  created: Event[];
+}

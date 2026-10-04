@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { ActivityIndicator, Button, FAB, Snackbar } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { SelectField } from '@/components/form';
 import { Avatar, Card, EmptyState, Screen, Sheet, StatusBadge } from '@/components/ui';
 import { toUserMessage } from '@/lib/errors';
+import { describeRecurrence, parseRecurrenceRule } from '@/lib/recurrence';
 import { eventsService, membersService, schedulesService, teamsService } from '@/services';
 import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
@@ -28,6 +30,10 @@ export default function EventDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  const [occurrencesOpen, setOccurrencesOpen] = useState(false);
+  const [preview, setPreview] = useState<string[] | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [teamId, setTeamId] = useState<string | null>(null);
@@ -59,6 +65,14 @@ export default function EventDetailScreen() {
     }
   }, [currentChurch, eventId, navigation]);
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
   useFocusEffect(
     useCallback(() => {
       load();
@@ -88,6 +102,41 @@ export default function EventDetailScreen() {
       .then(setRoles)
       .catch(() => setRoles([]));
   }, [currentChurch, teamId]);
+
+  const openOccurrences = async () => {
+    if (!currentChurch || !eventId) return;
+    setOccurrencesOpen(true);
+    setPreview(null);
+    try {
+      const result = await eventsService.previewOccurrences(currentChurch.id, eventId, 12);
+      setPreview(result.dates);
+    } catch (err) {
+      setToast(toUserMessage(err));
+      setOccurrencesOpen(false);
+    }
+  };
+
+  const generateOccurrences = async () => {
+    if (!currentChurch || !eventId) return;
+    setGenerating(true);
+    try {
+      // autoSchedule: each new date is staffed as it is created.
+      const result = await eventsService.materializeOccurrences(currentChurch.id, eventId, {
+        weeksAhead: 12,
+        autoSchedule: true,
+      });
+      setOccurrencesOpen(false);
+      setToast(
+        result.createdCount > 0
+          ? `${result.createdCount} data(s) criada(s) e escalada(s)`
+          : 'As datas já estavam criadas',
+      );
+    } catch (err) {
+      setToast(toUserMessage(err));
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const resetForm = () => {
     setFormOpen(false);
@@ -143,6 +192,7 @@ export default function EventDetailScreen() {
   return (
     <Screen padded={false}>
       <FlatList
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         data={schedules}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
@@ -161,6 +211,23 @@ export default function EventDetailScreen() {
                   </Text>
                 ) : null}
               </>
+            ) : null}
+
+            {event?.recurrenceRule ? (
+              <Pressable
+                onPress={openOccurrences}
+                style={[styles.repeat, { backgroundColor: theme.colors.primaryContainer }]}
+              >
+                <Ionicons name="repeat" size={16} color={theme.colors.onPrimaryContainer} />
+                <Text style={[styles.repeatText, { color: theme.colors.onPrimaryContainer }]}>
+                  {describeRecurrence(
+                    parseRecurrenceRule(event.recurrenceRule, new Date(event.eventDate).getDay()),
+                  )}
+                </Text>
+                <Text style={[styles.repeatAction, { color: theme.colors.primary }]}>
+                  Gerar datas
+                </Text>
+              </Pressable>
             ) : null}
 
             <View style={[styles.summary, { backgroundColor: theme.app.surfaceSunken }]}>
@@ -203,6 +270,47 @@ export default function EventDetailScreen() {
       {canManage() ? (
         <FAB icon="account-plus" style={styles.fab} onPress={() => setFormOpen(true)} />
       ) : null}
+
+      <Sheet
+        visible={occurrencesOpen}
+        onDismiss={() => setOccurrencesOpen(false)}
+        title="Próximas datas"
+        subtitle="As 12 semanas seguintes, já com escala montada"
+        footer={
+          <>
+            <Button
+              mode="outlined"
+              onPress={() => setOccurrencesOpen(false)}
+              style={styles.sheetAction}
+            >
+              Fechar
+            </Button>
+            <Button
+              mode="contained"
+              onPress={generateOccurrences}
+              loading={generating}
+              disabled={generating || !preview?.length}
+              style={styles.sheetAction}
+            >
+              Criar datas
+            </Button>
+          </>
+        }
+      >
+        {preview === null ? (
+          <ActivityIndicator />
+        ) : preview.length === 0 ? (
+          <Text style={{ color: theme.app.textMuted }}>
+            A regra não gera nenhuma data nas próximas 12 semanas.
+          </Text>
+        ) : (
+          preview.map((date) => (
+            <Text key={date} style={[styles.previewDate, { color: theme.app.text }]}>
+              {format(new Date(date), "EEEE, d 'de' MMMM", { locale: ptBR })}
+            </Text>
+          ))
+        )}
+      </Sheet>
 
       <Sheet
         visible={formOpen}
@@ -287,5 +395,16 @@ const styles = StyleSheet.create({
   memberName: { fontFamily: fontFamily.bodyBold, fontSize: fontSize.md },
   role: { fontFamily: fontFamily.body, fontSize: fontSize.sm },
   sheetAction: { flex: 1, borderRadius: radius.md },
+  repeat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginTop: spacing.md,
+  },
+  repeatText: { fontFamily: fontFamily.bodyMedium, fontSize: fontSize.sm, flex: 1 },
+  repeatAction: { fontFamily: fontFamily.bodyBold, fontSize: fontSize.xs },
+  previewDate: { fontFamily: fontFamily.body, fontSize: fontSize.sm, textTransform: 'capitalize' },
   fab: { position: 'absolute', right: spacing.lg, bottom: spacing.lg },
 });

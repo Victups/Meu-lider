@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { ActivityIndicator, Snackbar } from 'react-native-paper';
+import { ActivityIndicator, Button, Snackbar, TextInput } from 'react-native-paper';
 import { ScheduleCard } from '@/components/schedules/ScheduleCard';
-import { EmptyState, Screen } from '@/components/ui';
+import { EmptyState, Screen, Sheet } from '@/components/ui';
 import { toUserMessage } from '@/lib/errors';
 import { membersService, schedulesService } from '@/services';
 import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
-import { fontFamily, fontSize, spacing } from '@/theme';
+import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
 import type { ID, Schedule } from '@/types';
 
@@ -20,6 +20,8 @@ export default function SchedulesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actingOn, setActingOn] = useState<ID | null>(null);
+  const [releasing, setReleasing] = useState<Schedule | null>(null);
+  const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -59,16 +61,21 @@ export default function SchedulesScreen() {
     setRefreshing(false);
   };
 
-  const respond = async (schedule: Schedule, confirm: boolean) => {
-    if (!currentChurch) return;
-    setActingOn(schedule.id);
+  const submitRelease = async () => {
+    if (!currentChurch || !releasing) return;
+
+    setActingOn(releasing.id);
     try {
-      const updated = confirm
-        ? await schedulesService.confirm(currentChurch.id, schedule.id)
-        : await schedulesService.decline(currentChurch.id, schedule.id);
+      const updated = await schedulesService.requestRelease(
+        currentChurch.id,
+        releasing.id,
+        reason.trim(),
+      );
 
       setSchedules((current) => current.map((s) => (s.id === updated.id ? updated : s)));
-      setToast(confirm ? 'Presença confirmada' : 'Avisamos a liderança');
+      setReleasing(null);
+      setReason('');
+      setToast('Pedido enviado para a liderança');
     } catch (err) {
       setToast(toUserMessage(err));
     } finally {
@@ -115,11 +122,51 @@ export default function SchedulesScreen() {
           <ScheduleCard
             schedule={item}
             busy={actingOn === item.id}
-            onConfirm={() => respond(item, true)}
-            onDecline={() => respond(item, false)}
+            onRequestRelease={() => {
+              setReleasing(item);
+              setReason('');
+            }}
           />
         )}
       />
+
+      <Sheet
+        visible={releasing !== null}
+        onDismiss={() => setReleasing(null)}
+        title="Não vou poder servir"
+        subtitle={releasing?.event?.name}
+        footer={
+          <>
+            <Button mode="outlined" onPress={() => setReleasing(null)} style={styles.action}>
+              Voltar
+            </Button>
+            <Button
+              mode="contained"
+              onPress={submitRelease}
+              loading={actingOn !== null}
+              disabled={reason.trim().length < 3 || actingOn !== null}
+              style={styles.action}
+            >
+              Enviar pedido
+            </Button>
+          </>
+        }
+      >
+        <Text style={[styles.sheetHint, { color: theme.app.textMuted }]}>
+          Você continua escalado até a liderança liberar. Quem entra no seu lugar é escolhido
+          automaticamente.
+        </Text>
+        <TextInput
+          mode="outlined"
+          label="Motivo"
+          placeholder="Viagem, trabalho, saúde..."
+          value={reason}
+          onChangeText={setReason}
+          multiline
+          numberOfLines={3}
+          autoFocus
+        />
+      </Sheet>
 
       <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
         {toast ?? ''}
@@ -135,4 +182,6 @@ const styles = StyleSheet.create({
   subtitle: { fontFamily: fontFamily.body, fontSize: fontSize.sm, marginTop: 2 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.md },
   emptyList: { flexGrow: 1 },
+  action: { flex: 1, borderRadius: radius.md },
+  sheetHint: { fontFamily: fontFamily.body, fontSize: fontSize.sm, lineHeight: 20 },
 });

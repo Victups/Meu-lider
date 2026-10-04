@@ -186,7 +186,7 @@ export class AutoScheduleService implements IAutoScheduleService {
           teamId: teamRole.teamId,
           memberId: candidate.memberId,
           teamRoleId: teamRole.id,
-          status: ScheduleStatus.PENDING,
+          status: ScheduleStatus.SCHEDULED,
         }),
       );
 

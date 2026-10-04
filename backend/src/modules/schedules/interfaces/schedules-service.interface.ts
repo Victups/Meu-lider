@@ -9,8 +9,15 @@ export interface ISchedulesService {
   findOne(id: string): Promise<ScheduleResponseDto>;
   findByEvent(eventId: string): Promise<ScheduleResponseDto[]>;
   findByMember(memberId: string): Promise<ScheduleResponseDto[]>;
-  confirm(id: string, user: JwtUser): Promise<ScheduleResponseDto>;
-  decline(id: string): Promise<ScheduleResponseDto>;
+  /** Member asks out, with a reason; the slot stays flagged until a leader rules. */
+  requestRelease(id: string, reason: string, user: JwtUser): Promise<ScheduleResponseDto>;
+  approveRelease(id: string, user: JwtUser): Promise<ScheduleResponseDto>;
+  rejectRelease(id: string, user: JwtUser): Promise<ScheduleResponseDto>;
+  releaseByLeader(
+    id: string,
+    reason: string | undefined,
+    user: JwtUser,
+  ): Promise<ScheduleResponseDto>;
   update(
     id: string,
     updateData: UpdateScheduleDto,

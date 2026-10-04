@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import { ResourceType } from '../../common/constants';
 import {
   DuplicateScheduleException,
+  InsufficientPermissionException,
+  InvalidScheduleTransitionException,
   ResourceNotFoundException,
   TeamRoleNotInTeamException,
 } from '../../common/exceptions';
@@ -12,6 +14,7 @@ import { TeamRole } from '../teams/entities/team-role.entity';
 import { CreateScheduleDto } from './dtos/create-schedule.dto';
 import { ScheduleResponseDto } from './dtos/schedule-response.dto';
 import { UpdateScheduleDto } from './dtos/update-schedule.dto';
+import { Member } from '../members/entities/member.entity';
 import { TeamAccessService } from '../teams/team-access.service';
 import { AutoScheduleService } from './auto-schedule/auto-schedule.service';
 import { Schedule, ScheduleStatus } from './entities/schedule.entity';
@@ -31,6 +34,8 @@ export class SchedulesService implements ISchedulesService {
     private readonly teamRolesRepository: Repository<TeamRole>,
     private readonly autoScheduleService: AutoScheduleService,
     private readonly teamAccessService: TeamAccessService,
+    @InjectRepository(Member)
+    private readonly membersRepository: Repository<Member>,
   ) {}
 
   async create(
@@ -77,25 +82,76 @@ export class SchedulesService implements ISchedulesService {
     return toScheduleResponseList(schedules);
   }
 
-  async confirm(id: string, user: JwtUser): Promise<ScheduleResponseDto> {
+  /**
+   * Member asking out. The slot is NOT freed here: it stays on the roster,
+   * flagged, until a leader rules — so nobody vanishes from a Sunday without
+   * the leadership seeing it.
+   */
+  async requestRelease(
+    id: string,
+    reason: string,
+    user: JwtUser,
+  ): Promise<ScheduleResponseDto> {
     const schedule = await this.findScheduleEntity(id);
+    await this.assertIsOwnSchedule(schedule, user);
 
-    schedule.status = ScheduleStatus.CONFIRMED;
-    schedule.confirmedAt = new Date();
-    schedule.confirmedById = user.id;
+    if (schedule.status === ScheduleStatus.CANCELLED) {
+      throw new InvalidScheduleTransitionException('Esta escala já foi cancelada');
+    }
+
+    schedule.status = ScheduleStatus.RELEASE_REQUESTED;
+    schedule.releaseReason = reason;
+    schedule.releaseRequestedAt = new Date();
 
     return toScheduleResponse(await this.schedulesRepository.save(schedule));
   }
 
-  async decline(id: string): Promise<ScheduleResponseDto> {
+  /** Leader agrees the member is out: the slot opens and the engine refills. */
+  async approveRelease(id: string, user: JwtUser): Promise<ScheduleResponseDto> {
     const schedule = await this.findScheduleEntity(id);
-    schedule.status = ScheduleStatus.CANCELLED;
+    await this.teamAccessService.assertCanManageTeam(schedule.teamId, user);
 
+    return this.releaseAndRefill(schedule);
+  }
+
+  /** Leader turns the request down; the member stays on the roster. */
+  async rejectRelease(id: string, user: JwtUser): Promise<ScheduleResponseDto> {
+    const schedule = await this.findScheduleEntity(id);
+    await this.teamAccessService.assertCanManageTeam(schedule.teamId, user);
+
+    if (schedule.status !== ScheduleStatus.RELEASE_REQUESTED) {
+      throw new InvalidScheduleTransitionException('Não há pedido de saída nesta escala');
+    }
+
+    schedule.status = ScheduleStatus.SCHEDULED;
+    schedule.releaseReason = null;
+    schedule.releaseRequestedAt = null;
+
+    return toScheduleResponse(await this.schedulesRepository.save(schedule));
+  }
+
+  /** Leader pulling someone out directly — they warned by phone, say. */
+  async releaseByLeader(
+    id: string,
+    reason: string | undefined,
+    user: JwtUser,
+  ): Promise<ScheduleResponseDto> {
+    const schedule = await this.findScheduleEntity(id);
+    await this.teamAccessService.assertCanManageTeam(schedule.teamId, user);
+
+    if (reason) {
+      schedule.releaseReason = reason;
+    }
+
+    return this.releaseAndRefill(schedule);
+  }
+
+  private async releaseAndRefill(schedule: Schedule): Promise<ScheduleResponseDto> {
+    schedule.status = ScheduleStatus.CANCELLED;
     const saved = await this.schedulesRepository.save(schedule);
 
-    // The leader should not have to notice the hole: the engine fills it with
-    // the next fairest person right away. A failure here must not fail the
-    // decline — the member said no either way.
+    // The leader decides that someone is out; picking the replacement is the
+    // engine's job. A failure here must not undo the release.
     try {
       await this.autoScheduleService.refillEvent(saved.eventId);
     } catch (error) {
@@ -106,7 +162,19 @@ export class SchedulesService implements ISchedulesService {
       );
     }
 
-    return toScheduleResponse(await this.findScheduleEntity(id));
+    return toScheduleResponse(await this.findScheduleEntity(saved.id));
+  }
+
+  private async assertIsOwnSchedule(schedule: Schedule, user: JwtUser): Promise<void> {
+    const member = await this.membersRepository.findOne({
+      where: { id: schedule.memberId },
+    });
+
+    if (member?.userId !== user.id) {
+      throw new InsufficientPermissionException(
+        'Você só pode pedir saída das suas próprias escalas',
+      );
+    }
   }
 
   async update(
@@ -134,7 +202,7 @@ export class SchedulesService implements ISchedulesService {
     // Any change to the assignment invalidates a previous confirmation.
     schedule.confirmedAt = null;
     schedule.confirmedById = null;
-    schedule.status = ScheduleStatus.PENDING;
+    schedule.status = ScheduleStatus.SCHEDULED;
 
     return toScheduleResponse(await this.schedulesRepository.save(schedule));
   }
@@ -152,7 +220,7 @@ export class SchedulesService implements ISchedulesService {
     return {
       total: schedules.length,
       confirmed: this.countByStatus(schedules, ScheduleStatus.CONFIRMED),
-      pending: this.countByStatus(schedules, ScheduleStatus.PENDING),
+      pending: this.countByStatus(schedules, ScheduleStatus.SCHEDULED),
       cancelled: this.countByStatus(schedules, ScheduleStatus.CANCELLED),
       noShow: this.countByStatus(schedules, ScheduleStatus.NO_SHOW),
     };

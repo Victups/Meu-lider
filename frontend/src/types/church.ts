@@ -20,4 +20,20 @@ export interface CreateChurchInput {
   address?: string;
   phone?: string;
   email?: string;
+  website?: string;
+}
+
+/**
+ * `null` clears a field. The API skips validation for null on every optional
+ * rule, while an empty string would still be checked — and fail on `email`.
+ */
+export interface UpdateChurchInput {
+  name?: string;
+  slug?: string;
+  description?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  logoUrl?: string | null;
 }

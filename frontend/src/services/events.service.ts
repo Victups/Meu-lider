@@ -1,4 +1,11 @@
-import type { CreateEventInput, Event, ID, ISODateString } from '@/types';
+import type {
+  CreateEventInput,
+  Event,
+  ID,
+  ISODateString,
+  MaterializeResult,
+  OccurrencesPreview,
+} from '@/types';
 import { http } from './http/client';
 
 export interface EventDateRange {
@@ -24,6 +31,32 @@ export const eventsService = {
 
   async update(churchId: ID, eventId: ID, input: Partial<CreateEventInput>): Promise<Event> {
     const { data } = await http.put<Event>(`/churches/${churchId}/events/${eventId}`, input);
+    return data;
+  },
+
+  /** Dates the recurrence rule would produce, without creating anything. */
+  async previewOccurrences(
+    churchId: ID,
+    eventId: ID,
+    weeksAhead: number,
+  ): Promise<OccurrencesPreview> {
+    const { data } = await http.get<OccurrencesPreview>(
+      `/churches/${churchId}/events/${eventId}/occurrences/preview`,
+      { params: { weeksAhead } },
+    );
+    return data;
+  },
+
+  /** Creates the missing occurrences. Safe to call again — it skips existing ones. */
+  async materializeOccurrences(
+    churchId: ID,
+    eventId: ID,
+    options: { weeksAhead: number; autoSchedule?: boolean },
+  ): Promise<MaterializeResult> {
+    const { data } = await http.post<MaterializeResult>(
+      `/churches/${churchId}/events/${eventId}/occurrences`,
+      options,
+    );
     return data;
   },
 

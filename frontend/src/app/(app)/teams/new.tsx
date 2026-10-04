@@ -1,5 +1,11 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type TextInput as RNTextInput,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Snackbar, TextInput } from 'react-native-paper';
@@ -34,6 +40,8 @@ export default function NewTeamScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const currentChurch = useChurchStore((s) => s.currentChurch);
+
+  const descriptionRef = useRef<RNTextInput>(null);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -73,9 +81,14 @@ export default function NewTeamScreen() {
           placeholder="Louvor"
           value={name}
           onChangeText={setName}
+          autoFocus
+          returnKeyType="next"
+          blurOnSubmit={false}
+          onSubmitEditing={() => descriptionRef.current?.focus()}
         />
 
         <TextInput
+          ref={descriptionRef}
           mode="outlined"
           label="Descrição"
           value={description}

@@ -14,6 +14,7 @@ import { Roles } from '../../common/decorators';
 import { ChurchGuard, JwtAuthGuard, RolesGuard } from '../../common/guards';
 import type { AuthenticatedRequest, MessageResponse } from '../../common/interfaces';
 import { CreateScheduleDto } from './dtos/create-schedule.dto';
+import { LeaderReleaseDto, RequestReleaseDto } from './dtos/request-release.dto';
 import { ScheduleResponseDto } from './dtos/schedule-response.dto';
 import { UpdateScheduleDto } from './dtos/update-schedule.dto';
 import type { ScheduleStatistics } from './interfaces/schedule-statistics.interface';
@@ -63,17 +64,43 @@ export class SchedulesController {
     return this.schedulesService.update(id, updateData, req.user);
   }
 
-  @Post(':scheduleId/confirm')
-  confirm(
+  /** Member asking out of their own schedule; a reason is required. */
+  @Post(':scheduleId/release-request')
+  requestRelease(
+    @Param('scheduleId') id: string,
+    @Body() body: RequestReleaseDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ScheduleResponseDto> {
+    return this.schedulesService.requestRelease(id, body.reason, req.user);
+  }
+
+  @Roles(...MANAGER_ROLES)
+  @Post(':scheduleId/release-request/approve')
+  approveRelease(
     @Param('scheduleId') id: string,
     @Request() req: AuthenticatedRequest,
   ): Promise<ScheduleResponseDto> {
-    return this.schedulesService.confirm(id, req.user);
+    return this.schedulesService.approveRelease(id, req.user);
   }
 
-  @Post(':scheduleId/decline')
-  decline(@Param('scheduleId') id: string): Promise<ScheduleResponseDto> {
-    return this.schedulesService.decline(id);
+  @Roles(...MANAGER_ROLES)
+  @Post(':scheduleId/release-request/reject')
+  rejectRelease(
+    @Param('scheduleId') id: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ScheduleResponseDto> {
+    return this.schedulesService.rejectRelease(id, req.user);
+  }
+
+  /** Leader pulling someone out directly, without a request from the member. */
+  @Roles(...MANAGER_ROLES)
+  @Post(':scheduleId/release')
+  releaseByLeader(
+    @Param('scheduleId') id: string,
+    @Body() body: LeaderReleaseDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ScheduleResponseDto> {
+    return this.schedulesService.releaseByLeader(id, body.reason, req.user);
   }
 
   @Roles(...MANAGER_ROLES)
