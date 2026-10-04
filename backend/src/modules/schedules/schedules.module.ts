@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Availability } from '../availability/entities/availability.entity';
+import { WeekdayAvailability } from '../availability/entities/weekday-availability.entity';
 import { TeamMember } from '../teams/entities/team-member.entity';
 import { TeamRole } from '../teams/entities/team-role.entity';
 import { Event } from '../events/entities/event.entity';
+import { TeamsModule } from '../teams/teams.module';
 import { Schedule } from './entities/schedule.entity';
 import { ScheduleSwap } from './entities/schedule-swap.entity';
 import { SchedulesService } from './schedules.service';
@@ -15,12 +17,14 @@ import { ScheduleSwapsService } from './swaps/schedule-swaps.service';
 
 @Module({
   imports: [
+    TeamsModule,
     TypeOrmModule.forFeature([
       Schedule,
       ScheduleSwap,
       TeamRole,
       TeamMember,
       Availability,
+      WeekdayAvailability,
       Event,
     ]),
   ],

@@ -41,7 +41,8 @@ export class Member {
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => User)
+  // userId is NOT NULL, so the member row cannot outlive its account.
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
   user: User;
 
   @ManyToOne(() => Church, (church) => church.members, { onDelete: 'CASCADE' })

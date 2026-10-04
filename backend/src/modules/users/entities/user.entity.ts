@@ -6,6 +6,10 @@ import { RefreshToken } from './refresh-token.entity';
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   CHURCH_ADMIN = 'CHURCH_ADMIN',
+  /** Oversight: sees every team's roster, does not administer the system. */
+  PASTOR = 'PASTOR',
+  PRESBYTER = 'PRESBYTER',
+  /** Which teams they lead comes from team_members.isLeader, not from here. */
   LEADER = 'LEADER',
   MEMBER = 'MEMBER',
 }

@@ -5,3 +5,4 @@ export * from './error-code.constant';
 export * from './pagination.constant';
 export * from './resource.constant';
 export * from './scheduling.constant';
+export * from './roles.constant';

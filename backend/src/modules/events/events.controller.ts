@@ -10,7 +10,9 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { ChurchGuard, JwtAuthGuard } from '../../common/guards';
+import { MANAGER_ROLES } from '../../common/constants';
+import { Roles } from '../../common/decorators';
+import { ChurchGuard, JwtAuthGuard, RolesGuard } from '../../common/guards';
 import type { AuthenticatedRequest } from '../../common/interfaces';
 import { CreateEventDto } from './dtos/create-event.dto';
 import { EventResponseDto } from './dtos/event-response.dto';
@@ -18,7 +20,7 @@ import { UpdateEventDto } from './dtos/update-event.dto';
 import { EventsService } from './events.service';
 
 @Controller('churches/:churchId/events')
-@UseGuards(JwtAuthGuard, ChurchGuard)
+@UseGuards(JwtAuthGuard, ChurchGuard, RolesGuard)
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
@@ -35,6 +37,7 @@ export class EventsController {
     );
   }
 
+  @Roles(...MANAGER_ROLES)
   @Post()
   create(
     @Param('churchId') churchId: string,
@@ -50,6 +53,7 @@ export class EventsController {
     return this.eventsService.findOne(id);
   }
 
+  @Roles(...MANAGER_ROLES)
   @Put(':eventId')
   update(
     @Param('eventId') id: string,
@@ -58,6 +62,7 @@ export class EventsController {
     return this.eventsService.update(id, updateData);
   }
 
+  @Roles(...MANAGER_ROLES)
   @Delete(':eventId')
   remove(@Param('eventId') id: string): Promise<EventResponseDto> {
     return this.eventsService.remove(id);

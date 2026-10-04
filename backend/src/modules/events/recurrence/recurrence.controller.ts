@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
-import { ChurchGuard, JwtAuthGuard } from '../../../common/guards';
+import { MANAGER_ROLES } from '../../../common/constants';
+import { Roles } from '../../../common/decorators';
+import { ChurchGuard, JwtAuthGuard, RolesGuard } from '../../../common/guards';
 import type { AuthenticatedRequest } from '../../../common/interfaces';
 import { MaterializeOccurrencesDto } from './dtos/materialize-occurrences.dto';
 import {
@@ -9,7 +11,7 @@ import {
 import { RecurrenceService } from './recurrence.service';
 
 @Controller('churches/:churchId/events/:eventId/occurrences')
-@UseGuards(JwtAuthGuard, ChurchGuard)
+@UseGuards(JwtAuthGuard, ChurchGuard, RolesGuard)
 export class RecurrenceController {
   constructor(private readonly recurrenceService: RecurrenceService) {}
 
@@ -24,6 +26,7 @@ export class RecurrenceController {
   }
 
   /** Creates the missing occurrences in the window. Safe to call again. */
+  @Roles(...MANAGER_ROLES)
   @Post()
   materialize(
     @Param('churchId') churchId: string,

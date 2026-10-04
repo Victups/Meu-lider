@@ -9,7 +9,9 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { ChurchGuard, JwtAuthGuard } from '../../common/guards';
+import { MANAGER_ROLES } from '../../common/constants';
+import { Roles } from '../../common/decorators';
+import { ChurchGuard, JwtAuthGuard, RolesGuard } from '../../common/guards';
 import type { AuthenticatedRequest } from '../../common/interfaces';
 import { CreateTeamRoleDto } from './dtos/create-team-role.dto';
 import { TeamRoleResponseDto } from './dtos/team-role-response.dto';
@@ -17,7 +19,7 @@ import { UpdateTeamRoleDto } from './dtos/update-team-role.dto';
 import { TeamRolesService } from './team-roles.service';
 
 @Controller('churches/:churchId/teams/:teamId/roles')
-@UseGuards(JwtAuthGuard, ChurchGuard)
+@UseGuards(JwtAuthGuard, ChurchGuard, RolesGuard)
 export class TeamRolesController {
   constructor(private readonly teamRolesService: TeamRolesService) {}
 
@@ -27,6 +29,7 @@ export class TeamRolesController {
   }
 
   @Post()
+  @Roles(...MANAGER_ROLES)
   create(
     @Param('teamId') teamId: string,
     @Body() createTeamRoleDto: CreateTeamRoleDto,
@@ -45,6 +48,7 @@ export class TeamRolesController {
   }
 
   @Put(':roleId')
+  @Roles(...MANAGER_ROLES)
   update(
     @Param('teamId') teamId: string,
     @Param('roleId') roleId: string,
@@ -55,6 +59,7 @@ export class TeamRolesController {
   }
 
   @Delete(':roleId')
+  @Roles(...MANAGER_ROLES)
   remove(
     @Param('teamId') teamId: string,
     @Param('roleId') roleId: string,

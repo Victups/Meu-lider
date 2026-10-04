@@ -24,6 +24,7 @@ import {
   toDateOnlyString,
 } from '../../../common/utils';
 import { Availability } from '../../availability/entities/availability.entity';
+import { WeekdayAvailability } from '../../availability/entities/weekday-availability.entity';
 import {
   findAvailabilityWindowsForDay,
   isAvailableForWindows,
@@ -101,6 +102,8 @@ export class AutoScheduleService implements IAutoScheduleService {
     private readonly teamRolesRepository: Repository<TeamRole>,
     @InjectRepository(TeamMember)
     private readonly teamMembersRepository: Repository<TeamMember>,
+    @InjectRepository(WeekdayAvailability)
+    private readonly weekdayRepository: Repository<WeekdayAvailability>,
     @InjectRepository(Availability)
     private readonly availabilityRepository: Repository<Availability>,
   ) {}
@@ -119,7 +122,22 @@ export class AutoScheduleService implements IAutoScheduleService {
       throw new ChurchAccessDeniedException(churchId);
     }
 
-    const teamRoles = await this.findOpenPositions(churchId, options.teamIds);
+    return this.staffEvent(event, options);
+  }
+
+  /** The engine itself, with no authorisation: callers decide who may reach it. */
+  private async staffEvent(
+    event: Event,
+    options: GenerateScheduleDto,
+  ): Promise<AutoScheduleResultDto> {
+    const { churchId, id: eventId } = event;
+
+    // The event declares which teams it needs; an explicit override still wins.
+    const eventTeamIds = (event.teams ?? []).map((link) => link.teamId);
+    const teamRoles = await this.findOpenPositions(
+      churchId,
+      options.teamIds?.length ? options.teamIds : eventTeamIds,
+    );
     const existingSchedules = await this.schedulesRepository.find({ where: { eventId } });
 
     const assignments: AutoScheduleAssignmentDto[] = [];
@@ -145,6 +163,10 @@ export class AutoScheduleService implements IAutoScheduleService {
       const coveringMembers = candidatePool.teamMembersByTeam
         .get(teamRole.teamId)
         ?.filter((teamMember) => this.coversRole(teamMember, teamRole.id));
+
+      const bookedElsewhere = (coveringMembers ?? []).filter((teamMember) =>
+        bookedMemberIds.has(teamMember.memberId),
+      ).length;
 
       const candidates = (coveringMembers ?? [])
         .filter(
@@ -184,7 +206,11 @@ export class AutoScheduleService implements IAutoScheduleService {
             teamRole,
             teamRole.defaultSlots,
             totalFilled,
-            this.resolveGapReason(coveringMembers?.length ?? 0, candidates.length),
+            this.resolveGapReason(
+              coveringMembers?.length ?? 0,
+              candidates.length,
+              bookedElsewhere,
+            ),
           ),
         );
       }
@@ -205,6 +231,18 @@ export class AutoScheduleService implements IAutoScheduleService {
   }
 
   /** Sequential on purpose: each event has to see the assignments of the previous one. */
+  /**
+   * Re-runs the engine after someone drops out, with no permission check: the
+   * trigger is a member declining, not a leader acting. Cancelled rows keep
+   * blocking the member who declined, so the replacement is always someone new.
+   */
+  async refillEvent(eventId: string): Promise<AutoScheduleResultDto | null> {
+    const event = await this.findEventEntity(eventId).catch(() => null);
+    if (!event) return null;
+
+    return this.staffEvent(event, {});
+  }
+
   async generateForEvents(
     churchId: string,
     eventIds: string[],
@@ -229,7 +267,10 @@ export class AutoScheduleService implements IAutoScheduleService {
   }
 
   private async findEventEntity(id: string): Promise<Event> {
-    const event = await this.eventsRepository.findOne({ where: { id, active: true } });
+    const event = await this.eventsRepository.findOne({
+      where: { id, active: true },
+      relations: { teams: true },
+    });
 
     if (!event) {
       throw new ResourceNotFoundException(ResourceType.EVENT, id);
@@ -239,9 +280,9 @@ export class AutoScheduleService implements IAutoScheduleService {
   }
 
   /**
-   * Active positions of the teams to staff. There is no event/team association
-   * in the schema, so an explicit `teamIds` list wins and the fallback is every
-   * active team of the church.
+   * Active positions of the teams to staff. An empty `teamIds` means the event
+   * declared no teams, and nothing is scheduled — staffing the whole church
+   * would put the media crew in a band rehearsal.
    */
   private async findOpenPositions(churchId: string, teamIds?: string[]): Promise<TeamRole[]> {
     let query = this.teamRolesRepository
@@ -252,9 +293,11 @@ export class AutoScheduleService implements IAutoScheduleService {
       .andWhere('teamRole.active = :roleActive', { roleActive: true })
       .andWhere('teamRole.defaultSlots > 0');
 
-    if (teamIds?.length) {
-      query = query.andWhere('teamRole.teamId IN (:...teamIds)', { teamIds });
+    if (!teamIds?.length) {
+      return [];
     }
+
+    query = query.andWhere('teamRole.teamId IN (:...teamIds)', { teamIds });
 
     // Deterministic order so two runs produce the same roster.
     return query
@@ -362,7 +405,30 @@ export class AutoScheduleService implements IAutoScheduleService {
       }
     }
 
+    for (const memberId of await this.findWeekdayBlockedMemberIds(memberIds, eventDay)) {
+      unavailable.add(memberId);
+    }
+
     return unavailable;
+  }
+
+  /**
+   * Standing weekly rule — "I only serve on weekends". Only rows explicitly set
+   * to unavailable count, so a member who never set a preference stays eligible.
+   */
+  private async findWeekdayBlockedMemberIds(
+    memberIds: string[],
+    eventDay: string,
+  ): Promise<string[]> {
+    // eventDay is YYYY-MM-DD; the T12:00 avoids the day shifting by timezone.
+    const weekday = new Date(`${eventDay}T12:00:00`).getDay();
+
+    const blocked = await this.weekdayRepository.find({
+      where: { memberId: In(memberIds), weekday, isAvailable: false },
+      select: { memberId: true },
+    });
+
+    return blocked.map((entry) => entry.memberId);
   }
 
   private async loadServingHistory(
@@ -442,16 +508,24 @@ export class AutoScheduleService implements IAutoScheduleService {
     };
   }
 
+  /**
+   * A position can go unfilled for reasons the leader must act on differently:
+   * nobody plays bass at all, the bassist is away, or the bassist is already on
+   * keys for this same event. Collapsing them into one message hides the fix.
+   */
   private resolveGapReason(
     membersCoveringRole: number,
     availableCandidates: number,
+    excludedForBeingBooked: number,
   ): ScheduleGapReason {
     if (membersCoveringRole === 0) {
       return ScheduleGapReason.NO_MEMBER_COVERS_ROLE;
     }
 
     if (availableCandidates === 0) {
-      return ScheduleGapReason.NO_AVAILABLE_MEMBER;
+      return excludedForBeingBooked > 0
+        ? ScheduleGapReason.ALL_COVERING_MEMBERS_BUSY
+        : ScheduleGapReason.NO_AVAILABLE_MEMBER;
     }
 
     return ScheduleGapReason.NOT_ENOUGH_MEMBERS;

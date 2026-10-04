@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { addDays, format, isSameDay, nextSunday, nextWednesday, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Ionicons } from '@expo/vector-icons';
@@ -70,10 +70,10 @@ export function DateTimeField({
     );
   }
 
-  const handlePicked = (event: DateTimePickerEvent, selected?: Date) => {
+  const handlePicked = (selected: Date) => {
     const mode = picker;
+    // Android shows a one-shot dialog; iOS keeps the inline picker mounted.
     if (Platform.OS === 'android') setPicker(null);
-    if (event.type !== 'set' || !selected) return;
 
     if (mode === 'date') {
       onChange(withDate(value, selected));
@@ -162,7 +162,8 @@ export function DateTimeField({
             display={Platform.OS === 'ios' ? (picker === 'date' ? 'inline' : 'spinner') : 'default'}
             minimumDate={picker === 'date' ? minimumDate : undefined}
             locale="pt-BR"
-            onChange={handlePicked}
+            onValueChange={(_event, selected) => handlePicked(selected)}
+            onDismiss={() => setPicker(null)}
           />
         </View>
       ) : null}

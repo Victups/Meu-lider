@@ -1,12 +1,14 @@
 import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
-import { ChurchGuard, JwtAuthGuard } from '../../common/guards';
+import { MANAGER_ROLES } from '../../common/constants';
+import { Roles } from '../../common/decorators';
+import { ChurchGuard, JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { CreateMemberDto } from './dtos/create-member.dto';
 import { MemberResponseDto } from './dtos/member-response.dto';
 import { UpdateMemberDto } from './dtos/update-member.dto';
 import { MembersService } from './members.service';
 
 @Controller('churches/:churchId/members')
-@UseGuards(JwtAuthGuard, ChurchGuard)
+@UseGuards(JwtAuthGuard, ChurchGuard, RolesGuard)
 export class MembersController {
   constructor(private readonly membersService: MembersService) {}
 
@@ -15,6 +17,7 @@ export class MembersController {
     return this.membersService.findByChurch(churchId);
   }
 
+  @Roles(...MANAGER_ROLES)
   @Post()
   create(
     @Param('churchId') churchId: string,
@@ -29,6 +32,7 @@ export class MembersController {
     return this.membersService.findOne(id);
   }
 
+  @Roles(...MANAGER_ROLES)
   @Put(':memberId')
   update(
     @Param('memberId') id: string,

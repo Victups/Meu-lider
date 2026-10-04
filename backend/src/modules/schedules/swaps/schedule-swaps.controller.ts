@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
-import { ChurchGuard, JwtAuthGuard } from '../../../common/guards';
+import { MANAGER_ROLES } from '../../../common/constants';
+import { Roles } from '../../../common/decorators';
+import { ChurchGuard, JwtAuthGuard, RolesGuard } from '../../../common/guards';
 import type { AuthenticatedRequest } from '../../../common/interfaces';
 import { CreateScheduleSwapDto } from './dtos/create-schedule-swap.dto';
 import { ListScheduleSwapsDto } from './dtos/list-schedule-swaps.dto';
@@ -8,7 +10,7 @@ import { ScheduleSwapResponseDto } from './dtos/schedule-swap-response.dto';
 import { ScheduleSwapsService } from './schedule-swaps.service';
 
 @Controller('churches/:churchId/swaps')
-@UseGuards(JwtAuthGuard, ChurchGuard)
+@UseGuards(JwtAuthGuard, ChurchGuard, RolesGuard)
 export class ScheduleSwapsController {
   constructor(private readonly scheduleSwapsService: ScheduleSwapsService) {}
 
@@ -67,6 +69,7 @@ export class ScheduleSwapsController {
   }
 
   /** Leader or admin closes the request onto a member of their choosing. */
+  @Roles(...MANAGER_ROLES)
   @Post(':swapId/resolve')
   resolve(
     @Param('churchId') churchId: string,

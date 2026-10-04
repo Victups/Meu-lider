@@ -14,10 +14,10 @@ export default function TeamsLayout() {
         contentStyle: { backgroundColor: theme.app.canvas },
       }}
     >
-      {/* The title doubles as the back-button label on the next screen. */}
       <Stack.Screen name="index" options={{ headerShown: false, title: 'Equipes' }} />
       <Stack.Screen name="new" options={{ title: 'Nova equipe', presentation: 'modal' }} />
-      <Stack.Screen name="[teamId]" options={{ title: 'Equipe' }} />
+      {/* No back button: the edge swipe on iOS and the system button on Android already go back. */}
+      <Stack.Screen name="[teamId]" options={{ title: 'Equipe', headerBackVisible: false }} />
     </Stack>
   );
 }

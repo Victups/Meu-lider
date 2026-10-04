@@ -4,6 +4,7 @@ import type {
   ID,
   Team,
   TeamMember,
+  TeamMemberRoleLink,
   TeamRole,
 } from '@/types';
 import { http } from './http/client';
@@ -58,11 +59,12 @@ export const teamsService = {
     await http.delete(`/churches/${churchId}/teams/${teamId}/roles/${roleId}`);
   },
 
+  /** The API returns the link rows, each wrapping the position it points to. */
   async listMemberRoles(churchId: ID, teamId: ID, memberId: ID): Promise<TeamRole[]> {
-    const { data } = await http.get<TeamRole[]>(
+    const { data } = await http.get<TeamMemberRoleLink[]>(
       `/churches/${churchId}/teams/${teamId}/members/${memberId}/roles`,
     );
-    return data;
+    return data.map((link) => link.teamRole).filter((role): role is TeamRole => Boolean(role));
   },
 
   async assignMemberRole(
@@ -72,10 +74,10 @@ export const teamsService = {
     teamRoleId: ID,
     isPrimary = false,
   ): Promise<void> {
-    await http.post(`/churches/${churchId}/teams/${teamId}/members/${memberId}/roles`, {
-      teamRoleId,
-      isPrimary,
-    });
+    await http.post(
+      `/churches/${churchId}/teams/${teamId}/members/${memberId}/roles/${teamRoleId}`,
+      { isPrimary },
+    );
   },
 
   async unassignMemberRole(

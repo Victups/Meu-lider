@@ -14,10 +14,10 @@ export default function EventsLayout() {
         contentStyle: { backgroundColor: theme.app.canvas },
       }}
     >
-      {/* The title doubles as the back-button label on the next screen. */}
       <Stack.Screen name="index" options={{ headerShown: false, title: 'Eventos' }} />
       <Stack.Screen name="new" options={{ title: 'Novo evento', presentation: 'modal' }} />
-      <Stack.Screen name="[eventId]" options={{ title: 'Evento' }} />
+      {/* No back button: the edge swipe on iOS and the system button on Android already go back. */}
+      <Stack.Screen name="[eventId]" options={{ title: 'Evento', headerBackVisible: false }} />
     </Stack>
   );
 }

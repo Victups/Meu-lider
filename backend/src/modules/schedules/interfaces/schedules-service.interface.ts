@@ -5,13 +5,17 @@ import type { UpdateScheduleDto } from '../dtos/update-schedule.dto';
 import type { ScheduleStatistics } from './schedule-statistics.interface';
 
 export interface ISchedulesService {
-  create(createScheduleDto: CreateScheduleDto): Promise<ScheduleResponseDto>;
+  create(createScheduleDto: CreateScheduleDto, user: JwtUser): Promise<ScheduleResponseDto>;
   findOne(id: string): Promise<ScheduleResponseDto>;
   findByEvent(eventId: string): Promise<ScheduleResponseDto[]>;
   findByMember(memberId: string): Promise<ScheduleResponseDto[]>;
   confirm(id: string, user: JwtUser): Promise<ScheduleResponseDto>;
   decline(id: string): Promise<ScheduleResponseDto>;
-  update(id: string, updateData: UpdateScheduleDto): Promise<ScheduleResponseDto>;
-  remove(id: string): Promise<void>;
+  update(
+    id: string,
+    updateData: UpdateScheduleDto,
+    user: JwtUser,
+  ): Promise<ScheduleResponseDto>;
+  remove(id: string, user: JwtUser): Promise<void>;
   getStatistics(eventId: string): Promise<ScheduleStatistics>;
 }

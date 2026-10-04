@@ -25,6 +25,15 @@ export interface TeamRole extends Timestamped {
   active: boolean;
 }
 
+/** Link row between a team member and a position they can cover. */
+export interface TeamMemberRoleLink {
+  id: ID;
+  teamMemberId: ID;
+  teamRoleId: ID;
+  isPrimary: boolean;
+  teamRole?: TeamRole;
+}
+
 export interface CreateTeamRoleInput {
   name: string;
   slug?: string;

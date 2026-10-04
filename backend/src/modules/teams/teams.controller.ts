@@ -9,7 +9,9 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { ChurchGuard, JwtAuthGuard } from '../../common/guards';
+import { MANAGER_ROLES } from '../../common/constants';
+import { Roles } from '../../common/decorators';
+import { ChurchGuard, JwtAuthGuard, RolesGuard } from '../../common/guards';
 import type { AuthenticatedRequest, MessageResponse } from '../../common/interfaces';
 import { AddTeamMemberDto } from './dtos/add-team-member.dto';
 import { AssignTeamRoleDto } from './dtos/assign-team-role.dto';
@@ -19,10 +21,11 @@ import { TeamMemberRoleResponseDto } from './dtos/team-member-role-response.dto'
 import { TeamResponseDto } from './dtos/team-response.dto';
 import { UpdateTeamDto } from './dtos/update-team.dto';
 import { TeamRolesService } from './team-roles.service';
+
 import { TeamsService } from './teams.service';
 
 @Controller('churches/:churchId/teams')
-@UseGuards(JwtAuthGuard, ChurchGuard)
+@UseGuards(JwtAuthGuard, ChurchGuard, RolesGuard)
 export class TeamsController {
   constructor(
     private readonly teamsService: TeamsService,
@@ -33,6 +36,8 @@ export class TeamsController {
   findByChurch(@Param('churchId') churchId: string): Promise<TeamResponseDto[]> {
     return this.teamsService.findByChurch(churchId);
   }
+
+  @Roles(...MANAGER_ROLES)
 
   @Post()
   create(
@@ -49,6 +54,8 @@ export class TeamsController {
     return this.teamsService.findOne(id);
   }
 
+  @Roles(...MANAGER_ROLES)
+
   @Put(':teamId')
   update(
     @Param('teamId') id: string,
@@ -57,6 +64,8 @@ export class TeamsController {
   ): Promise<TeamResponseDto> {
     return this.teamsService.update(id, updateData, req.user);
   }
+
+  @Roles(...MANAGER_ROLES)
 
   @Delete(':teamId')
   remove(
@@ -71,6 +80,8 @@ export class TeamsController {
     return this.teamsService.getTeamMembers(teamId);
   }
 
+  @Roles(...MANAGER_ROLES)
+
   @Post(':teamId/members/:memberId')
   addMember(
     @Param('teamId') teamId: string,
@@ -79,6 +90,8 @@ export class TeamsController {
   ): Promise<TeamMemberResponseDto> {
     return this.teamsService.addMember(teamId, memberId, body.role);
   }
+
+  @Roles(...MANAGER_ROLES)
 
   @Delete(':teamId/members/:memberId')
   async removeMember(
@@ -97,6 +110,8 @@ export class TeamsController {
     return this.teamRolesService.getMemberRoles(teamId, memberId);
   }
 
+  @Roles(...MANAGER_ROLES)
+
   @Post(':teamId/members/:memberId/roles/:roleId')
   assignRoleToMember(
     @Param('teamId') teamId: string,
@@ -106,6 +121,8 @@ export class TeamsController {
   ): Promise<TeamMemberRoleResponseDto> {
     return this.teamRolesService.assignRoleToMember(teamId, memberId, roleId, body);
   }
+
+  @Roles(...MANAGER_ROLES)
 
   @Delete(':teamId/members/:memberId/roles/:roleId')
   async removeRoleFromMember(

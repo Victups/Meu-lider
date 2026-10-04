@@ -24,6 +24,12 @@ export interface Availability extends Timestamped {
   reason: string | null;
 }
 
+/** One weekday of the member's standing rule. 0 = Sunday … 6 = Saturday. */
+export interface WeekdayAvailability {
+  weekday: number;
+  isAvailable: boolean;
+}
+
 export interface CreateAvailabilityInput {
   memberId: ID;
   dateFrom: ISODateString;

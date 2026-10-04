@@ -50,6 +50,8 @@ export const FAIRNESS_WEIGHTS = {
 export enum ScheduleGapReason {
   NO_MEMBER_COVERS_ROLE = 'NO_MEMBER_COVERS_ROLE',
   NO_AVAILABLE_MEMBER = 'NO_AVAILABLE_MEMBER',
+  /** Everyone who covers it is already serving another position at this event. */
+  ALL_COVERING_MEMBERS_BUSY = 'ALL_COVERING_MEMBERS_BUSY',
   NOT_ENOUGH_MEMBERS = 'NOT_ENOUGH_MEMBERS',
 }
 
@@ -58,6 +60,8 @@ export const SCHEDULE_GAP_MESSAGES: Record<ScheduleGapReason, string> = {
     'Nenhum membro ativo da equipe cobre esta função',
   [ScheduleGapReason.NO_AVAILABLE_MEMBER]:
     'Todos os membros que cobrem esta função estão indisponíveis nesta data',
+  [ScheduleGapReason.ALL_COVERING_MEMBERS_BUSY]:
+    'Quem cobre esta função já está escalado em outra função neste evento',
   [ScheduleGapReason.NOT_ENOUGH_MEMBERS]:
     'Não há membros disponíveis suficientes para preencher todas as vagas',
 };

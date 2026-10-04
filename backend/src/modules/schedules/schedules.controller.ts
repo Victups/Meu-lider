@@ -9,7 +9,9 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { ChurchGuard, JwtAuthGuard } from '../../common/guards';
+import { MANAGER_ROLES } from '../../common/constants';
+import { Roles } from '../../common/decorators';
+import { ChurchGuard, JwtAuthGuard, RolesGuard } from '../../common/guards';
 import type { AuthenticatedRequest, MessageResponse } from '../../common/interfaces';
 import { CreateScheduleDto } from './dtos/create-schedule.dto';
 import { ScheduleResponseDto } from './dtos/schedule-response.dto';
@@ -18,7 +20,7 @@ import type { ScheduleStatistics } from './interfaces/schedule-statistics.interf
 import { SchedulesService } from './schedules.service';
 
 @Controller('churches/:churchId/schedules')
-@UseGuards(JwtAuthGuard, ChurchGuard)
+@UseGuards(JwtAuthGuard, ChurchGuard, RolesGuard)
 export class SchedulesController {
   constructor(private readonly schedulesService: SchedulesService) {}
 
@@ -37,9 +39,13 @@ export class SchedulesController {
     return this.schedulesService.findByMember(memberId);
   }
 
+  @Roles(...MANAGER_ROLES)
   @Post()
-  create(@Body() createScheduleDto: CreateScheduleDto): Promise<ScheduleResponseDto> {
-    return this.schedulesService.create(createScheduleDto);
+  create(
+    @Body() createScheduleDto: CreateScheduleDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ScheduleResponseDto> {
+    return this.schedulesService.create(createScheduleDto, req.user);
   }
 
   @Get(':scheduleId')
@@ -47,12 +53,14 @@ export class SchedulesController {
     return this.schedulesService.findOne(id);
   }
 
+  @Roles(...MANAGER_ROLES)
   @Put(':scheduleId')
   update(
     @Param('scheduleId') id: string,
     @Body() updateData: UpdateScheduleDto,
+    @Request() req: AuthenticatedRequest,
   ): Promise<ScheduleResponseDto> {
-    return this.schedulesService.update(id, updateData);
+    return this.schedulesService.update(id, updateData, req.user);
   }
 
   @Post(':scheduleId/confirm')
@@ -68,9 +76,13 @@ export class SchedulesController {
     return this.schedulesService.decline(id);
   }
 
+  @Roles(...MANAGER_ROLES)
   @Delete(':scheduleId')
-  async remove(@Param('scheduleId') id: string): Promise<MessageResponse> {
-    await this.schedulesService.remove(id);
+  async remove(
+    @Param('scheduleId') id: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<MessageResponse> {
+    await this.schedulesService.remove(id, req.user);
     return { message: 'Escala removida' };
   }
 }

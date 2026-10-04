@@ -1,13 +1,15 @@
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button, Snackbar, TextInput } from 'react-native-paper';
 import { DateTimeField } from '@/components/form';
-import { Screen } from '@/components/ui';
+import { RoleChip, Screen } from '@/components/ui';
 import { toUserMessage } from '@/lib/errors';
-import { eventsService } from '@/services';
+import { eventsService, teamsService } from '@/services';
 import { useChurchStore } from '@/stores/church';
-import { radius, spacing } from '@/theme';
+import { fontFamily, fontSize, radius, spacing } from '@/theme';
+import { useAppTheme } from '@/theme/use-app-theme';
+import type { Team } from '@/types';
 
 function nextHour(): Date {
   const date = new Date();
@@ -16,8 +18,12 @@ function nextHour(): Date {
 }
 
 export default function NewEventScreen() {
+  const theme = useAppTheme();
   const router = useRouter();
   const currentChurch = useChurchStore((s) => s.currentChurch);
+
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -26,7 +32,24 @@ export default function NewEventScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = name.trim().length > 0 && Boolean(currentChurch) && !submitting;
+  useEffect(() => {
+    if (!currentChurch) return;
+    teamsService
+      .list(currentChurch.id)
+      .then(setTeams)
+      .catch(() => setTeams([]));
+  }, [currentChurch]);
+
+  const toggleTeam = (teamId: string) =>
+    setSelectedTeams((current) =>
+      current.includes(teamId)
+        ? current.filter((id) => id !== teamId)
+        : [...current, teamId],
+    );
+
+  // Without a team the scheduler has nobody to staff, so block the save.
+  const canSubmit =
+    name.trim().length > 0 && selectedTeams.length > 0 && Boolean(currentChurch) && !submitting;
 
   const handleSubmit = async () => {
     if (!currentChurch) return;
@@ -39,6 +62,7 @@ export default function NewEventScreen() {
         eventDate: eventDate.toISOString(),
         description: description.trim() || undefined,
         location: location.trim() || undefined,
+        teamIds: selectedTeams,
       });
       router.back();
     } catch (err) {
@@ -68,6 +92,31 @@ export default function NewEventScreen() {
           value={location}
           onChangeText={setLocation}
         />
+
+        <View style={styles.teamsBlock}>
+          <Text style={[styles.label, { color: theme.app.textMuted }]}>
+            Equipes necessárias
+          </Text>
+          <Text style={[styles.hint, { color: theme.app.textSubtle }]}>
+            A escala é montada só para as equipes marcadas.
+          </Text>
+          <View style={styles.teams}>
+            {teams.length === 0 ? (
+              <Text style={[styles.hint, { color: theme.app.textSubtle }]}>
+                Nenhuma equipe cadastrada ainda.
+              </Text>
+            ) : (
+              teams.map((team) => (
+                <RoleChip
+                  key={team.id}
+                  label={team.name}
+                  selected={selectedTeams.includes(team.id)}
+                  onPress={() => toggleTeam(team.id)}
+                />
+              ))
+            )}
+          </View>
+        </View>
 
         <TextInput
           mode="outlined"
@@ -99,6 +148,10 @@ export default function NewEventScreen() {
 
 const styles = StyleSheet.create({
   form: { gap: spacing.lg, paddingTop: spacing.lg },
+  label: { fontFamily: fontFamily.bodyMedium, fontSize: fontSize.sm },
+  hint: { fontFamily: fontFamily.body, fontSize: fontSize.xs, lineHeight: 18 },
+  teamsBlock: { gap: spacing.xs },
+  teams: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   submit: { marginTop: spacing.md, borderRadius: radius.md },
   submitContent: { paddingVertical: spacing.xs },
 });

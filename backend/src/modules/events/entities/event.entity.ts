@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { Church } from '../../churches/entities/church.entity';
 import { User } from '../../users/entities/user.entity';
 import { Schedule } from '../../schedules/entities/schedule.entity';
+import { EventTeam } from './event-team.entity';
 
 @Entity('events')
 export class Event {
@@ -50,6 +51,9 @@ export class Event {
 
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   createdBy: User;
+
+  @OneToMany(() => EventTeam, (eventTeam) => eventTeam.event)
+  teams: EventTeam[];
 
   @OneToMany(() => Schedule, (schedule) => schedule.event)
   schedules: Schedule[];
