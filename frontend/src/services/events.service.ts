@@ -60,6 +60,14 @@ export const eventsService = {
     return data;
   },
 
+  /** Materializes the next month for ALL recurring events + auto-schedule. */
+  async materializeMonth(churchId: ID): Promise<MaterializeResult[]> {
+    const { data } = await http.post<MaterializeResult[]>(
+      `/churches/${churchId}/events/materialize-month`,
+    );
+    return data;
+  },
+
   async remove(churchId: ID, eventId: ID): Promise<void> {
     await http.delete(`/churches/${churchId}/events/${eventId}`);
   },

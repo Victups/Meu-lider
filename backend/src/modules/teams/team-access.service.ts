@@ -30,10 +30,9 @@ export class TeamAccessService {
     return membership !== null;
   }
 
-  /** Admins manage any team; a leader only the ones they actually lead. */
+  /** Admins manage any team; anyone with isLeader on the team can manage it. */
   async canManageTeam(teamId: string, user: JwtUser): Promise<boolean> {
     if (CHURCH_MANAGER_ROLES.includes(user.role)) return true;
-    if (user.role !== UserRole.LEADER) return false;
 
     return this.leadsTeam(teamId, user);
   }

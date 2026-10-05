@@ -76,6 +76,8 @@ export class EventsService implements IEventsService {
   ): Promise<EventResponseDto[]> {
     let query = this.eventsRepository
       .createQueryBuilder('event')
+      .leftJoinAndSelect('event.teams', 'eventTeam')
+      .leftJoinAndSelect('eventTeam.team', 'team')
       .where('event.churchId = :churchId', { churchId })
       .andWhere('event.active = :active', { active: true });
 

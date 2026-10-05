@@ -10,13 +10,23 @@ import {
 } from './dtos/occurrences-result.dto';
 import { RecurrenceService } from './recurrence.service';
 
-@Controller('churches/:churchId/events/:eventId/occurrences')
+@Controller('churches/:churchId/events')
 @UseGuards(JwtAuthGuard, ChurchGuard, RolesGuard)
 export class RecurrenceController {
   constructor(private readonly recurrenceService: RecurrenceService) {}
 
+  /** Materializes the next month for ALL recurring events in the church. */
+  @Roles(...MANAGER_ROLES)
+  @Post('materialize-month')
+  materializeMonth(
+    @Param('churchId') churchId: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<MaterializeOccurrencesResultDto[]> {
+    return this.recurrenceService.materializeMonth(churchId, req.user);
+  }
+
   /** Dates the rule would produce, without creating anything. */
-  @Get('preview')
+  @Get(':eventId/occurrences/preview')
   preview(
     @Param('churchId') churchId: string,
     @Param('eventId') eventId: string,
@@ -27,7 +37,7 @@ export class RecurrenceController {
 
   /** Creates the missing occurrences in the window. Safe to call again. */
   @Roles(...MANAGER_ROLES)
-  @Post()
+  @Post(':eventId/occurrences')
   materialize(
     @Param('churchId') churchId: string,
     @Param('eventId') eventId: string,

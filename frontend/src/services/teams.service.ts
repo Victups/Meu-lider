@@ -42,6 +42,10 @@ export const teamsService = {
     return data;
   },
 
+  async removeMember(churchId: ID, teamId: ID, memberId: ID): Promise<void> {
+    await http.delete(`/churches/${churchId}/teams/${teamId}/members/${memberId}`);
+  },
+
   async listRoles(churchId: ID, teamId: ID): Promise<TeamRole[]> {
     const { data } = await http.get<TeamRole[]>(`/churches/${churchId}/teams/${teamId}/roles`);
     return data;

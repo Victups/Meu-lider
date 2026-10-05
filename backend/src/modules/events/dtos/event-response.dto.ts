@@ -1,5 +1,12 @@
 import type { ScheduleResponseDto } from '../../schedules/dtos/schedule-response.dto';
 
+export interface EventTeamDto {
+  id: string;
+  eventId: string;
+  teamId: string;
+  team?: { id: string; name: string; color: string | null };
+}
+
 export class EventResponseDto {
   id: string;
   churchId: string;
@@ -15,4 +22,5 @@ export class EventResponseDto {
   createdAt: Date;
   updatedAt: Date;
   schedules?: ScheduleResponseDto[];
+  teams?: EventTeamDto[];
 }

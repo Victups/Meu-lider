@@ -10,6 +10,12 @@ export class GenerateScheduleDto {
   @IsUUID('4', { each: true })
   teamIds?: string[];
 
+  /** Only fill these specific roles. Omit to fill every active role of the selected teams. */
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  roleIds?: string[];
+
   /** Run the engine and return the proposal without writing any schedule. */
   @IsOptional()
   @IsBoolean()

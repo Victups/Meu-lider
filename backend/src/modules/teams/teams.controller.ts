@@ -20,6 +20,7 @@ import { TeamMemberResponseDto } from './dtos/team-member-response.dto';
 import { TeamMemberRoleResponseDto } from './dtos/team-member-role-response.dto';
 import { TeamResponseDto } from './dtos/team-response.dto';
 import { UpdateTeamDto } from './dtos/update-team.dto';
+import { TeamAccessService } from './team-access.service';
 import { TeamRolesService } from './team-roles.service';
 
 import { TeamsService } from './teams.service';
@@ -30,6 +31,7 @@ export class TeamsController {
   constructor(
     private readonly teamsService: TeamsService,
     private readonly teamRolesService: TeamRolesService,
+    private readonly teamAccessService: TeamAccessService,
   ) {}
 
   @Get()
@@ -80,24 +82,24 @@ export class TeamsController {
     return this.teamsService.getTeamMembers(teamId);
   }
 
-  @Roles(...MANAGER_ROLES)
-
   @Post(':teamId/members/:memberId')
-  addMember(
+  async addMember(
     @Param('teamId') teamId: string,
     @Param('memberId') memberId: string,
     @Body() body: AddTeamMemberDto,
+    @Request() req: AuthenticatedRequest,
   ): Promise<TeamMemberResponseDto> {
+    await this.teamAccessService.assertCanManageTeam(teamId, req.user);
     return this.teamsService.addMember(teamId, memberId, body.role);
   }
-
-  @Roles(...MANAGER_ROLES)
 
   @Delete(':teamId/members/:memberId')
   async removeMember(
     @Param('teamId') teamId: string,
     @Param('memberId') memberId: string,
+    @Request() req: AuthenticatedRequest,
   ): Promise<MessageResponse> {
+    await this.teamAccessService.assertCanManageTeam(teamId, req.user);
     await this.teamsService.removeMember(teamId, memberId);
     return { message: 'Membro removido da equipe' };
   }
@@ -110,26 +112,26 @@ export class TeamsController {
     return this.teamRolesService.getMemberRoles(teamId, memberId);
   }
 
-  @Roles(...MANAGER_ROLES)
-
   @Post(':teamId/members/:memberId/roles/:roleId')
-  assignRoleToMember(
+  async assignRoleToMember(
     @Param('teamId') teamId: string,
     @Param('memberId') memberId: string,
     @Param('roleId') roleId: string,
     @Body() body: AssignTeamRoleDto,
+    @Request() req: AuthenticatedRequest,
   ): Promise<TeamMemberRoleResponseDto> {
+    await this.teamAccessService.assertCanManageTeam(teamId, req.user);
     return this.teamRolesService.assignRoleToMember(teamId, memberId, roleId, body);
   }
-
-  @Roles(...MANAGER_ROLES)
 
   @Delete(':teamId/members/:memberId/roles/:roleId')
   async removeRoleFromMember(
     @Param('teamId') teamId: string,
     @Param('memberId') memberId: string,
     @Param('roleId') roleId: string,
+    @Request() req: AuthenticatedRequest,
   ): Promise<MessageResponse> {
+    await this.teamAccessService.assertCanManageTeam(teamId, req.user);
     await this.teamRolesService.removeRoleFromMember(teamId, memberId, roleId);
     return { message: 'Função removida do membro' };
   }

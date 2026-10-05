@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -12,6 +12,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,12 +28,6 @@ interface SheetProps {
   footer?: ReactNode;
 }
 
-/**
- * Bottom sheet instead of a centred dialog: it is the modal shape both systems
- * use today, and it keeps the action close to the thumb. iOS gets a translucent
- * blurred surface; Android a solid elevated one, since blur there is costly and
- * off-idiom.
- */
 export function Sheet({ visible, onDismiss, title, subtitle, children, footer }: SheetProps) {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -40,6 +35,22 @@ export function Sheet({ visible, onDismiss, title, subtitle, children, footer }:
 
   const progress = useRef(new Animated.Value(0)).current;
   const drag = useRef(new Animated.Value(0)).current;
+
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [footerHeight, setFooterHeight] = useState(0);
+
+  const onHeaderLayout = useCallback(
+    (e: LayoutChangeEvent) => setHeaderHeight(e.nativeEvent.layout.height),
+    [],
+  );
+  const onFooterLayout = useCallback(
+    (e: LayoutChangeEvent) => setFooterHeight(e.nativeEvent.layout.height),
+    [],
+  );
+
+  const panelMaxHeight = height * 0.9;
+  const chrome = headerHeight + footerHeight + insets.bottom + spacing.lg + spacing.md;
+  const scrollMaxHeight = panelMaxHeight - chrome;
 
   useEffect(() => {
     drag.setValue(0);
@@ -51,7 +62,6 @@ export function Sheet({ visible, onDismiss, title, subtitle, children, footer }:
     }).start();
   }, [visible, progress, drag]);
 
-  // Swiping the sheet down closes it, so no on-screen dismiss button is needed.
   const pan = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 8,
@@ -69,13 +79,12 @@ export function Sheet({ visible, onDismiss, title, subtitle, children, footer }:
     }),
   ).current;
 
-  // Kept in a ref so the PanResponder is created once, not on every render.
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
 
   const enterY = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [height * 0.35, 0],
+    outputRange: [height * 0.4, 0],
   });
 
   const isIOS = Platform.OS === 'ios';
@@ -91,24 +100,31 @@ export function Sheet({ visible, onDismiss, title, subtitle, children, footer }:
         },
       ]}
     >
-      <View style={[styles.handle, { backgroundColor: theme.app.borderStrong }]} />
+      <View onLayout={onHeaderLayout}>
+        <View style={[styles.handle, { backgroundColor: theme.app.borderStrong }]} />
 
-      <View style={styles.heading}>
-        <Text style={[styles.title, { color: theme.app.text }]}>{title}</Text>
-        {subtitle ? (
-          <Text style={[styles.subtitle, { color: theme.app.textMuted }]}>{subtitle}</Text>
-        ) : null}
+        <View style={styles.heading}>
+          <Text style={[styles.title, { color: theme.app.text }]}>{title}</Text>
+          {subtitle ? (
+            <Text style={[styles.subtitle, { color: theme.app.textMuted }]}>{subtitle}</Text>
+          ) : null}
+        </View>
       </View>
 
       <ScrollView
+        style={scrollMaxHeight > 0 ? { maxHeight: scrollMaxHeight } : undefined}
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator
       >
         {children}
       </ScrollView>
 
-      {footer ? <View style={styles.footer}>{footer}</View> : null}
+      {footer ? (
+        <View style={styles.footer} onLayout={onFooterLayout}>
+          {footer}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -119,7 +135,7 @@ export function Sheet({ visible, onDismiss, title, subtitle, children, footer }:
       </Animated.View>
 
       <KeyboardAvoidingView
-        behavior={isIOS ? 'padding' : undefined}
+        behavior={isIOS ? 'padding' : 'height'}
         style={styles.container}
         pointerEvents="box-none"
       >
@@ -158,7 +174,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: spacing.md,
     paddingHorizontal: spacing.xl,
-    maxHeight: '88%',
   },
   handle: {
     alignSelf: 'center',

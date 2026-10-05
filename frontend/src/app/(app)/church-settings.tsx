@@ -6,7 +6,8 @@ import {
   View,
   type TextInput as RNTextInput,
 } from 'react-native';
-import { ActivityIndicator, Button, HelperText, Snackbar, TextInput } from 'react-native-paper';
+import { useRouter } from 'expo-router';
+import { ActivityIndicator, Button, Divider, HelperText, List, Snackbar, TextInput } from 'react-native-paper';
 import { EmptyState, Screen } from '@/components/ui';
 import { toUserMessage } from '@/lib/errors';
 import { churchesService } from '@/services';
@@ -71,6 +72,7 @@ function buildPayload(form: ChurchForm, loaded: ChurchForm): UpdateChurchInput {
 
 export default function ChurchSettingsScreen() {
   const theme = useAppTheme();
+  const router = useRouter();
   const currentChurch = useChurchStore((s) => s.currentChurch);
   const replaceChurch = useChurchStore((s) => s.replaceChurch);
   const isAdmin = useAuthStore((s) => s.isAdmin);
@@ -180,6 +182,19 @@ export default function ChurchSettingsScreen() {
   return (
     <Screen padded={false}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <List.Section>
+          <List.Subheader>Configurações</List.Subheader>
+          <List.Item
+            title="Agenda fixa"
+            description="Cultos, reuniões e eventos recorrentes"
+            left={(props) => <List.Icon {...props} icon="calendar-clock" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => router.push('/agenda')}
+          />
+        </List.Section>
+
+        <Divider />
+
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.app.text }]}>Dados da igreja</Text>
           {church ? (

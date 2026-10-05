@@ -58,3 +58,32 @@ export interface ScheduleStatistics {
   cancelled: number;
   noShow: number;
 }
+
+export interface AutoScheduleResult {
+  eventId: ID;
+  eventName: string;
+  eventDate: ISODateString;
+  dryRun: boolean;
+  createdCount: number;
+  alreadyFilledCount: number;
+  missingCount: number;
+  fullyStaffed: boolean;
+  assignments: AutoScheduleAssignment[];
+  gaps: ScheduleGap[];
+}
+
+export interface AutoScheduleAssignment {
+  memberId: ID;
+  teamRoleId: ID;
+  teamRoleName: string;
+  score: number;
+}
+
+export interface ScheduleGap {
+  teamRoleId: ID;
+  teamRoleName: string;
+  slotsNeeded: number;
+  slotsFilled: number;
+  missingSlots: number;
+  reason: string;
+}

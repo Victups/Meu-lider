@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import {
+  CHURCH_MANAGER_ROLES,
   FAIRNESS_CONSECUTIVE_WINDOW_DAYS,
   FAIRNESS_HISTORY_WINDOW_DAYS,
   FAIRNESS_LOOKBACK_DAYS,
@@ -9,7 +10,6 @@ import {
   FAIRNESS_MAX_REST_DAYS,
   FAIRNESS_WEIGHTS,
   ResourceType,
-  SCHEDULE_MANAGER_ROLES,
   ScheduleGapReason,
 } from '../../../common/constants';
 import {
@@ -30,6 +30,7 @@ import {
   isAvailableForWindows,
 } from '../../availability/utils';
 import { Event } from '../../events/entities/event.entity';
+import { TeamAccessService } from '../../teams/team-access.service';
 import { TeamMember } from '../../teams/entities/team-member.entity';
 import { TeamRole } from '../../teams/entities/team-role.entity';
 import { Schedule, ScheduleStatus } from '../entities/schedule.entity';
@@ -106,6 +107,7 @@ export class AutoScheduleService implements IAutoScheduleService {
     private readonly weekdayRepository: Repository<WeekdayAvailability>,
     @InjectRepository(Availability)
     private readonly availabilityRepository: Repository<Availability>,
+    private readonly teamAccessService: TeamAccessService,
   ) {}
 
   async generateForEvent(
@@ -114,13 +116,13 @@ export class AutoScheduleService implements IAutoScheduleService {
     options: GenerateScheduleDto,
     user: JwtUser,
   ): Promise<AutoScheduleResultDto> {
-    this.assertCanManageSchedules(user);
-
     const event = await this.findEventEntity(eventId);
 
     if (event.churchId !== churchId) {
       throw new ChurchAccessDeniedException(churchId);
     }
+
+    await this.assertCanScheduleEvent(event, user);
 
     return this.staffEvent(event, options);
   }
@@ -134,10 +136,15 @@ export class AutoScheduleService implements IAutoScheduleService {
 
     // The event declares which teams it needs; an explicit override still wins.
     const eventTeamIds = (event.teams ?? []).map((link) => link.teamId);
-    const teamRoles = await this.findOpenPositions(
+    let teamRoles = await this.findOpenPositions(
       churchId,
       options.teamIds?.length ? options.teamIds : eventTeamIds,
     );
+
+    if (options.roleIds?.length) {
+      const allowed = new Set(options.roleIds);
+      teamRoles = teamRoles.filter((role) => allowed.has(role.id));
+    }
     const existingSchedules = await this.schedulesRepository.find({ where: { eventId } });
 
     const assignments: AutoScheduleAssignmentDto[] = [];
@@ -258,12 +265,17 @@ export class AutoScheduleService implements IAutoScheduleService {
     return results;
   }
 
-  private assertCanManageSchedules(user: JwtUser): void {
-    if (!SCHEDULE_MANAGER_ROLES.includes(user.role)) {
-      throw new InsufficientPermissionException(
-        'Apenas líderes e administradores podem gerar escalas',
-      );
+  private async assertCanScheduleEvent(event: Event, user: JwtUser): Promise<void> {
+    if (CHURCH_MANAGER_ROLES.includes(user.role)) return;
+
+    const eventTeamIds = (event.teams ?? []).map((link) => link.teamId);
+    for (const teamId of eventTeamIds) {
+      if (await this.teamAccessService.canManageTeam(teamId, user)) return;
     }
+
+    throw new InsufficientPermissionException(
+      'Apenas líderes das equipes do evento ou administradores podem gerar escalas',
+    );
   }
 
   private async findEventEntity(id: string): Promise<Event> {

@@ -16,6 +16,7 @@ import type { JwtUser } from '../../../common/interfaces';
 import { addWeeks, endOfDay, startOfDay } from '../../../common/utils';
 import { AutoScheduleService } from '../../schedules/auto-schedule/auto-schedule.service';
 import { Event } from '../entities/event.entity';
+import { EventTeam } from '../entities/event-team.entity';
 import { toEventResponseList } from '../mappers/event.mapper';
 import { MaterializeOccurrencesDto } from './dtos/materialize-occurrences.dto';
 import {
@@ -48,6 +49,8 @@ export class RecurrenceService implements IRecurrenceService {
   constructor(
     @InjectRepository(Event)
     private readonly eventsRepository: Repository<Event>,
+    @InjectRepository(EventTeam)
+    private readonly eventTeamsRepository: Repository<EventTeam>,
     private readonly autoScheduleService: AutoScheduleService,
   ) {}
 
@@ -85,6 +88,10 @@ export class RecurrenceService implements IRecurrenceService {
           missingDates.map((date) => this.buildOccurrence(template, date, user)),
         )
       : [];
+
+    if (created.length > 0) {
+      await this.copyTeamLinks(template.id, created.map((e) => e.id));
+    }
 
     return {
       templateEventId: template.id,
@@ -183,6 +190,83 @@ export class RecurrenceService implements IRecurrenceService {
     }
 
     return event;
+  }
+
+  /**
+   * Materializes the entire next month for every recurring event in a church,
+   * with auto-schedule. Called by the monthly cron or manually by an admin.
+   */
+  async materializeMonth(
+    churchId: string,
+    user: JwtUser,
+  ): Promise<MaterializeOccurrencesResultDto[]> {
+    this.assertCanManageSchedules(user);
+
+    const templates = await this.eventsRepository.find({
+      where: { churchId, active: true },
+    });
+
+    const recurring = templates.filter((e) => e.recurrenceRule);
+
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+
+    const results: MaterializeOccurrencesResultDto[] = [];
+
+    for (const template of recurring) {
+      const pattern = parseRecurrenceRule(template.recurrenceRule);
+      const allDates = expandRecurrence(template.eventDate, pattern, endOfNextMonth);
+      const dates = allDates.filter((d) => d.getTime() >= nextMonth.getTime());
+
+      const missingDates = await this.rejectExistingOccurrences(template, dates);
+      const created = missingDates.length
+        ? await this.eventsRepository.save(
+            missingDates.map((date) => this.buildOccurrence(template, date, user)),
+          )
+        : [];
+
+      if (created.length > 0) {
+        await this.copyTeamLinks(template.id, created.map((e) => e.id));
+      }
+
+      const autoSchedule = created.length > 0
+        ? await this.autoScheduleService.generateForEvents(
+            churchId,
+            created.map((e) => e.id),
+            {},
+            user,
+          )
+        : undefined;
+
+      results.push({
+        templateEventId: template.id,
+        recurrenceRule: template.recurrenceRule,
+        horizon: endOfNextMonth,
+        createdCount: created.length,
+        skippedCount: dates.length - missingDates.length,
+        occurrences: toEventResponseList(created),
+        autoSchedule,
+      });
+    }
+
+    return results;
+  }
+
+  private async copyTeamLinks(templateEventId: string, occurrenceIds: string[]): Promise<void> {
+    const templateTeams = await this.eventTeamsRepository.find({
+      where: { eventId: templateEventId },
+    });
+
+    if (templateTeams.length === 0) return;
+
+    const links = occurrenceIds.flatMap((eventId) =>
+      templateTeams.map((tl) =>
+        this.eventTeamsRepository.create({ eventId, teamId: tl.teamId }),
+      ),
+    );
+
+    await this.eventTeamsRepository.save(links);
   }
 
   private assertCanManageSchedules(user: JwtUser): void {

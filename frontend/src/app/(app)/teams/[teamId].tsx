@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
-import { ActivityIndicator, Button, FAB, Snackbar, TextInput } from 'react-native-paper';
+import { ActivityIndicator, Button, FAB, IconButton, Snackbar, TextInput } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
 import { SelectField } from '@/components/form';
 import { Avatar, Card, EmptyState, RoleChip, Screen, Sheet } from '@/components/ui';
 import { toUserMessage } from '@/lib/errors';
@@ -19,7 +20,8 @@ export default function TeamDetailScreen() {
   const navigation = useNavigation();
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const currentChurch = useChurchStore((s) => s.currentChurch);
-  const canManage = useAuthStore((s) => s.canManageTeams);
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = useAuthStore((s) => s.isAdmin);
 
   const [team, setTeam] = useState<Team | null>(null);
   const [roles, setRoles] = useState<TeamRole[]>([]);
@@ -38,7 +40,17 @@ export default function TeamDetailScreen() {
   const [roleSlots, setRoleSlots] = useState('1');
 
   const [assignTo, setAssignTo] = useState<TeamMember | null>(null);
+  const [removingMember, setRemovingMember] = useState<TeamMember | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const isLeaderOfThisTeam = useMemo(() => {
+    if (!user) return false;
+    return teamMembers.some(
+      (entry) => entry.isLeader && entry.member?.userId === user.id,
+    );
+  }, [user, teamMembers]);
+
+  const canManage = isAdmin() || isLeaderOfThisTeam;
 
   const load = useCallback(async () => {
     if (!currentChurch || !teamId) return;
@@ -119,6 +131,15 @@ export default function TeamDetailScreen() {
     }
   };
 
+  const handleRemoveMember = async () => {
+    if (!currentChurch || !teamId || !removingMember) return;
+    const ok = await runAction(
+      () => teamsService.removeMember(currentChurch.id, teamId, removingMember.memberId),
+      'Membro removido da equipe',
+    );
+    if (ok) setRemovingMember(null);
+  };
+
   const handleAddRole = async () => {
     if (!currentChurch || !teamId || !roleName.trim()) return;
     const ok = await runAction(
@@ -176,7 +197,10 @@ export default function TeamDetailScreen() {
 
   return (
     <Screen padded={false}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        contentContainerStyle={styles.content}
+      >
         {team?.description ? (
           <Text style={[styles.description, { color: theme.app.textMuted }]}>
             {team.description}
@@ -186,7 +210,7 @@ export default function TeamDetailScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHead}>
             <Text style={[styles.sectionTitle, { color: theme.app.text }]}>Funções</Text>
-            {canManage() ? (
+            {canManage ? (
               <Button compact onPress={() => setAddRoleOpen(true)}>
                 Nova
               </Button>
@@ -223,18 +247,36 @@ export default function TeamDetailScreen() {
                 <Card key={entry.id} style={styles.memberCard}>
                   <View style={styles.memberRow}>
                     <Avatar name={entry.member?.fullName ?? '?'} color={team?.color} />
-                    <View style={styles.memberInfo}>
+                    <Pressable
+                      style={styles.memberInfo}
+                      onPress={canManage && roles.length > 0 ? () => setAssignTo(entry) : undefined}
+                    >
                       <Text style={[styles.memberName, { color: theme.app.text }]}>
                         {entry.member?.fullName ?? 'Membro'}
                       </Text>
                       <Text style={[styles.memberRole, { color: theme.app.textMuted }]}>
                         {entry.isLeader ? 'Líder' : 'Integrante'}
                       </Text>
-                    </View>
-                    {canManage() && roles.length > 0 ? (
-                      <Button compact onPress={() => setAssignTo(entry)}>
-                        Funções
-                      </Button>
+                    </Pressable>
+
+                    {canManage ? (
+                      <View style={styles.actions}>
+                        {roles.length > 0 ? (
+                          <IconButton
+                            icon="swap-horizontal"
+                            size={20}
+                            onPress={() => setAssignTo(entry)}
+                          />
+                        ) : null}
+                        {!entry.isLeader ? (
+                          <IconButton
+                            icon="close"
+                            size={18}
+                            iconColor={theme.colors.error}
+                            onPress={() => setRemovingMember(entry)}
+                          />
+                        ) : null}
+                      </View>
                     ) : null}
                   </View>
 
@@ -244,6 +286,16 @@ export default function TeamDetailScreen() {
                         <RoleChip key={role.id} label={role.name} selected />
                       ))}
                     </View>
+                  ) : canManage && roles.length > 0 ? (
+                    <Pressable
+                      onPress={() => setAssignTo(entry)}
+                      style={styles.assignHint}
+                    >
+                      <Ionicons name="add-circle-outline" size={16} color={theme.colors.primary} />
+                      <Text style={[styles.assignHintText, { color: theme.colors.primary }]}>
+                        Atribuir funções
+                      </Text>
+                    </Pressable>
                   ) : null}
                 </Card>
               );
@@ -252,7 +304,7 @@ export default function TeamDetailScreen() {
         </View>
       </ScrollView>
 
-      {canManage() ? (
+      {canManage ? (
         <FAB icon="account-plus" style={styles.fab} onPress={() => setAddMemberOpen(true)} />
       ) : null}
 
@@ -285,6 +337,32 @@ export default function TeamDetailScreen() {
           options={candidates.map((member) => ({ value: member.id, label: member.fullName }))}
           emptyMessage="Todos os membros já estão nesta equipe"
         />
+      </Sheet>
+
+      <Sheet
+        visible={removingMember !== null}
+        onDismiss={() => setRemovingMember(null)}
+        title="Remover da equipe?"
+        subtitle={`${removingMember?.member?.fullName ?? 'Membro'} será removido de ${team?.name ?? 'equipe'} e de todas as funções atribuídas.`}
+        footer={
+          <>
+            <Button mode="outlined" onPress={() => setRemovingMember(null)} style={styles.action}>
+              Cancelar
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleRemoveMember}
+              loading={saving}
+              disabled={saving}
+              buttonColor={theme.colors.error}
+              style={styles.action}
+            >
+              Remover
+            </Button>
+          </>
+        }
+      >
+        <View />
       </Sheet>
 
       <Sheet
@@ -378,6 +456,9 @@ const styles = StyleSheet.create({
   memberName: { fontFamily: fontFamily.bodyBold, fontSize: fontSize.md },
   memberRole: { fontFamily: fontFamily.body, fontSize: fontSize.sm },
   memberChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  actions: { flexDirection: 'row', alignItems: 'center' },
+  assignHint: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
+  assignHintText: { fontFamily: fontFamily.bodyMedium, fontSize: fontSize.xs },
   action: { flex: 1, borderRadius: radius.md },
   fab: { position: 'absolute', right: spacing.lg, bottom: spacing.lg },
 });

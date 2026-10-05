@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ENV_FILE_PATH } from './common/constants';
 import { buildTypeOrmOptions } from './config';
@@ -19,6 +20,7 @@ import { TeamsModule } from './modules/teams/teams.module';
       cache: true,
       envFilePath: ENV_FILE_PATH,
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: buildTypeOrmOptions,

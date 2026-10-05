@@ -2,6 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   MONTH_POSITIONS,
   WEEKDAY_LABEL,
+  WEEKDAY_OPTIONS,
   describeRecurrence,
   type MonthPosition,
   type RecurrenceKind,
@@ -19,7 +20,10 @@ const KINDS: { value: RecurrenceKind; label: string }[] = [
   { value: 'none', label: 'Não repete' },
   { value: 'weekly', label: 'Toda semana' },
   { value: 'monthly-nth', label: 'Por semana do mês' },
+  { value: 'monthly-relative', label: 'Relativo a dia do mês' },
 ];
+
+const OFFSETS = [-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6];
 
 export function RecurrenceField({ value, onChange }: RecurrenceFieldProps) {
   const theme = useAppTheme();
@@ -92,9 +96,114 @@ export function RecurrenceField({ value, onChange }: RecurrenceFieldProps) {
         </>
       ) : null}
 
+      {value.kind === 'monthly-relative' ? (
+        <>
+          <Text style={[styles.hint, { color: theme.app.textSubtle }]}>
+            Dia de referência
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.positions}>
+            {WEEKDAY_OPTIONS.map((wd) => {
+              const active = wd.value === value.refWeekday;
+              return (
+                <Pressable
+                  key={wd.value}
+                  onPress={() => {
+                    const actualWeekday = ((wd.value + value.offset) % 7 + 7) % 7;
+                    onChange({ ...value, refWeekday: wd.value, weekday: actualWeekday });
+                  }}
+                  style={[
+                    styles.position,
+                    {
+                      backgroundColor: active ? theme.colors.primaryContainer : 'transparent',
+                      borderColor: active ? theme.colors.primary : theme.app.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.positionText,
+                      { color: active ? theme.colors.onPrimaryContainer : theme.app.textMuted },
+                    ]}
+                  >
+                    {wd.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          <Text style={[styles.hint, { color: theme.app.textSubtle }]}>
+            Semana do mês
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.positions}>
+            {MONTH_POSITIONS.map((position) => {
+              const active = position.value === value.position;
+              return (
+                <Pressable
+                  key={position.value}
+                  onPress={() => onChange({ ...value, position: position.value as MonthPosition })}
+                  style={[
+                    styles.position,
+                    {
+                      backgroundColor: active ? theme.colors.primaryContainer : 'transparent',
+                      borderColor: active ? theme.colors.primary : theme.app.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.positionText,
+                      { color: active ? theme.colors.onPrimaryContainer : theme.app.textMuted },
+                    ]}
+                  >
+                    {position.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          <Text style={[styles.hint, { color: theme.app.textSubtle }]}>
+            Quantos dias antes ou depois
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.positions}>
+            {OFFSETS.map((off) => {
+              const active = off === value.offset;
+              const label = off < 0 ? `${Math.abs(off)} antes` : `${off} depois`;
+              return (
+                <Pressable
+                  key={off}
+                  onPress={() => {
+                    const actualWeekday = ((value.refWeekday + off) % 7 + 7) % 7;
+                    onChange({ ...value, offset: off, weekday: actualWeekday });
+                  }}
+                  style={[
+                    styles.position,
+                    {
+                      backgroundColor: active ? theme.colors.primaryContainer : 'transparent',
+                      borderColor: active ? theme.colors.primary : theme.app.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.positionText,
+                      { color: active ? theme.colors.onPrimaryContainer : theme.app.textMuted },
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </>
+      ) : null}
+
       {value.kind !== 'none' ? (
         <Text style={[styles.summary, { color: theme.colors.primary }]}>
-          {describeRecurrence(value)} · o dia da semana vem da data escolhida
+          {describeRecurrence(value)}
+          {value.kind !== 'monthly-relative' ? ' · o dia da semana vem da data escolhida' : ''}
         </Text>
       ) : null}
     </View>

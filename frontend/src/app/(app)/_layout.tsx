@@ -27,6 +27,7 @@ export default function AppTabsLayout() {
           borderTopColor: theme.app.border,
         },
         tabBarLabelStyle: { fontFamily: fontFamily.bodyMedium, fontSize: fontSize.xs },
+        popToTopOnBlur: true,
       }}
     >
       {TABS.map(({ name, title, icon }) => (
@@ -43,6 +44,7 @@ export default function AppTabsLayout() {
       {/* Reached from the profile, not from the tab bar. */}
       <Tabs.Screen name="availability" options={{ href: null }} />
       <Tabs.Screen name="church-settings" options={{ href: null }} />
+      <Tabs.Screen name="agenda" options={{ href: null }} />
     </Tabs>
   );
 }

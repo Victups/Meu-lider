@@ -50,6 +50,12 @@ export interface RecurrencePattern {
   monthlyWeekdays: MonthlyWeekday[];
   count: number | null;
   until: Date | null;
+  /**
+   * Day offset applied after resolving a monthly-by-weekday occurrence.
+   * E.g. `FREQ=MONTHLY;BYDAY=1SU;OFFSET=-3` → Thursday before the 1st Sunday.
+   * Only meaningful with `monthlyWeekdays`.
+   */
+  offset: number;
 }
 
 /** One `nSU` term of a monthly BYDAY. */
@@ -71,6 +77,7 @@ const MONTHS_PER_YEAR = 12;
 const UNTIL_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 /** Safety net for the expansion loops; never reached by a valid rule. */
 const MAX_ITERATIONS = 1000;
+const MAX_OFFSET = 6;
 
 export function parseRecurrenceRule(rule: string): RecurrencePattern {
   const parts = rule
@@ -89,6 +96,7 @@ export function parseRecurrenceRule(rule: string): RecurrencePattern {
     monthlyWeekdays: [],
     count: null,
     until: null,
+    offset: 0,
   };
 
   let hasFrequency = false;
@@ -122,6 +130,9 @@ export function parseRecurrenceRule(rule: string): RecurrencePattern {
       case 'UNTIL':
         pattern.until = parseUntil(rule, value);
         break;
+      case 'OFFSET':
+        pattern.offset = parseOffset(rule, value);
+        break;
       default:
         throw new InvalidRecurrenceRuleException(rule, `campo desconhecido "${key}"`);
     }
@@ -142,6 +153,13 @@ export function parseRecurrenceRule(rule: string): RecurrencePattern {
     throw new InvalidRecurrenceRuleException(
       rule,
       'BYDAY com posição (ex.: "1SU") só vale com FREQ=MONTHLY',
+    );
+  }
+
+  if (pattern.offset !== 0 && pattern.monthlyWeekdays.length === 0) {
+    throw new InvalidRecurrenceRuleException(
+      rule,
+      'OFFSET só pode ser usado com FREQ=MONTHLY;BYDAY=nXX (ex.: FREQ=MONTHLY;BYDAY=1SU;OFFSET=-3)',
     );
   }
 
@@ -244,6 +262,7 @@ function expandMonthlyByWeekday(
     const monthly = pattern.monthlyWeekdays
       .map(({ weekday, position }) => nthWeekdayOfMonth(year, month, weekday, position))
       .filter((day): day is Date => day !== null)
+      .map((day) => (pattern.offset !== 0 ? addDays(day, pattern.offset) : day))
       .map((day) => withTimeOfDay(day, anchor))
       .filter(
         (date) => date.getTime() > anchor.getTime() && date.getTime() <= horizon.getTime(),
@@ -430,4 +449,17 @@ function parseUntil(rule: string, value: string): Date {
   }
 
   return until;
+}
+
+function parseOffset(rule: string, raw: string): number {
+  const value = Number(raw);
+
+  if (!Number.isInteger(value) || Math.abs(value) > MAX_OFFSET || value === 0) {
+    throw new InvalidRecurrenceRuleException(
+      rule,
+      `OFFSET deve ser um inteiro entre -${MAX_OFFSET} e ${MAX_OFFSET}, diferente de zero`,
+    );
+  }
+
+  return value;
 }

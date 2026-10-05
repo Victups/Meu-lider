@@ -1,6 +1,18 @@
 import { toScheduleSummaryList } from '../../schedules/mappers/schedule.mapper';
-import { EventResponseDto } from '../dtos/event-response.dto';
+import { EventResponseDto, EventTeamDto } from '../dtos/event-response.dto';
 import { Event } from '../entities/event.entity';
+import type { EventTeam } from '../entities/event-team.entity';
+
+function toEventTeam(et: EventTeam): EventTeamDto {
+  return {
+    id: et.id,
+    eventId: et.eventId,
+    teamId: et.teamId,
+    team: et.team
+      ? { id: et.team.id, name: et.team.name, color: et.team.color ?? null }
+      : undefined,
+  };
+}
 
 export function toEventResponse(event: Event): EventResponseDto {
   return {
@@ -18,6 +30,7 @@ export function toEventResponse(event: Event): EventResponseDto {
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
     schedules: event.schedules ? toScheduleSummaryList(event.schedules) : undefined,
+    teams: event.teams ? event.teams.map(toEventTeam) : undefined,
   };
 }
 

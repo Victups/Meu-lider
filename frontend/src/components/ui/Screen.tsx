@@ -16,8 +16,7 @@ export function Screen({ children, scroll = false, padded = true, edgeToEdgeTop 
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
 
-  const style = [
-    styles.base,
+  const base = [
     { backgroundColor: theme.app.canvas },
     padded && styles.padded,
     { paddingTop: edgeToEdgeTop ? 0 : insets.top, paddingBottom: insets.bottom },
@@ -26,8 +25,8 @@ export function Screen({ children, scroll = false, padded = true, edgeToEdgeTop 
   if (scroll) {
     return (
       <ScrollView
-        style={{ backgroundColor: theme.app.canvas }}
-        contentContainerStyle={style}
+        style={[styles.fill, { backgroundColor: theme.app.canvas }]}
+        contentContainerStyle={[styles.scrollContent, ...base]}
         keyboardShouldPersistTaps="handled"
       >
         {children}
@@ -35,10 +34,11 @@ export function Screen({ children, scroll = false, padded = true, edgeToEdgeTop 
     );
   }
 
-  return <View style={style}>{children}</View>;
+  return <View style={[styles.fill, ...base]}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
-  base: { flex: 1 },
+  fill: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
   padded: { paddingHorizontal: spacing.lg },
 });

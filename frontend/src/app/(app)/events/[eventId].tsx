@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { SelectField } from '@/components/form';
-import { Avatar, Card, EmptyState, Screen, Sheet, StatusBadge } from '@/components/ui';
+import { Avatar, Card, EmptyState, RoleChip, Screen, Sheet, StatusBadge } from '@/components/ui';
 import { toUserMessage } from '@/lib/errors';
 import { describeRecurrence, parseRecurrenceRule } from '@/lib/recurrence';
 import { eventsService, membersService, schedulesService, teamsService } from '@/services';
@@ -14,14 +14,15 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
-import type { Event, Member, Schedule, Team, TeamRole } from '@/types';
+import type { Event, EventTeamLink, Member, Schedule, Team, TeamRole } from '@/types';
 
 export default function EventDetailScreen() {
   const theme = useAppTheme();
   const navigation = useNavigation();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const currentChurch = useChurchStore((s) => s.currentChurch);
-  const canManage = useAuthStore((s) => s.canManageTeams);
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = useAuthStore((s) => s.isAdmin);
 
   const [event, setEvent] = useState<Event | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -42,6 +43,17 @@ export default function EventDetailScreen() {
   const [roles, setRoles] = useState<TeamRole[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // Auto-schedule by leader: select which roles to fill
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [eventTeamRoles, setEventTeamRoles] = useState<TeamRole[]>([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set());
+  const [scheduling, setScheduling] = useState(false);
+
+  // Detect if user leads any of the event's teams
+  const [leaderOfTeamIds, setLeaderOfTeamIds] = useState<Set<string>>(new Set());
+
+  const canManage = isAdmin() || leaderOfTeamIds.size > 0;
+
   const load = useCallback(async () => {
     if (!currentChurch || !eventId) return;
     try {
@@ -58,12 +70,25 @@ export default function EventDetailScreen() {
       setTeams(loadedTeams);
       setMembers(loadedMembers);
       navigation.setOptions({ title: loadedEvent.name });
+
+      // Check which event teams the user leads
+      if (user && loadedEvent.teams?.length) {
+        const leaderIds = new Set<string>();
+        for (const link of loadedEvent.teams) {
+          const teamMembers = await teamsService.listMembers(currentChurch.id, link.teamId).catch(() => []);
+          const isLeader = teamMembers.some(
+            (tm) => tm.isLeader && tm.member?.userId === user.id,
+          );
+          if (isLeader) leaderIds.add(link.teamId);
+        }
+        setLeaderOfTeamIds(leaderIds);
+      }
     } catch (err) {
       setError(toUserMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [currentChurch, eventId, navigation]);
+  }, [currentChurch, eventId, navigation, user]);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -80,8 +105,10 @@ export default function EventDetailScreen() {
   );
 
   const summary = useMemo(() => {
-    const confirmed = schedules.filter((s) => s.status === 'CONFIRMED').length;
-    return { confirmed, total: schedules.length };
+    const scheduled = schedules.filter(
+      (s) => s.status === 'SCHEDULED' || s.status === 'CONFIRMED',
+    ).length;
+    return { scheduled, total: schedules.length };
   }, [schedules]);
 
   const availableMembers = useMemo(() => {
@@ -91,7 +118,6 @@ export default function EventDetailScreen() {
     return members.filter((member) => !takenInTeam.has(member.id));
   }, [members, schedules, teamId]);
 
-  // Positions belong to the team, so the list reloads whenever it changes.
   useEffect(() => {
     if (!currentChurch || !teamId) {
       setRoles([]);
@@ -120,7 +146,6 @@ export default function EventDetailScreen() {
     if (!currentChurch || !eventId) return;
     setGenerating(true);
     try {
-      // autoSchedule: each new date is staffed as it is created.
       const result = await eventsService.materializeOccurrences(currentChurch.id, eventId, {
         weeksAhead: 12,
         autoSchedule: true,
@@ -135,6 +160,54 @@ export default function EventDetailScreen() {
       setToast(toUserMessage(err));
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const openAutoSchedule = async () => {
+    if (!currentChurch || !event?.teams?.length) return;
+    setScheduleOpen(true);
+    setEventTeamRoles([]);
+    setSelectedRoleIds(new Set());
+
+    const managedTeamIds = isAdmin()
+      ? event.teams.map((t) => t.teamId)
+      : [...leaderOfTeamIds];
+
+    const allRoles: TeamRole[] = [];
+    for (const tId of managedTeamIds) {
+      const teamRoles = await teamsService.listRoles(currentChurch.id, tId).catch(() => []);
+      allRoles.push(...teamRoles);
+    }
+    setEventTeamRoles(allRoles);
+    setSelectedRoleIds(new Set(allRoles.map((r) => r.id)));
+  };
+
+  const toggleRole = (roleId: string) => {
+    setSelectedRoleIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(roleId)) next.delete(roleId);
+      else next.add(roleId);
+      return next;
+    });
+  };
+
+  const handleAutoSchedule = async () => {
+    if (!currentChurch || !eventId || selectedRoleIds.size === 0) return;
+    setScheduling(true);
+    try {
+      const result = await schedulesService.autoSchedule(currentChurch.id, eventId, {
+        roleIds: [...selectedRoleIds],
+      });
+      setScheduleOpen(false);
+      const msg = result.createdCount > 0
+        ? `${result.createdCount} pessoa(s) escalada(s)${result.missingCount > 0 ? `, ${result.missingCount} vaga(s) sem candidato` : ''}`
+        : 'Todas as vagas já estavam preenchidas';
+      setToast(msg);
+      await load();
+    } catch (err) {
+      setToast(toUserMessage(err));
+    } finally {
+      setScheduling(false);
     }
   };
 
@@ -189,6 +262,8 @@ export default function EventDetailScreen() {
     );
   }
 
+  const eventTeams = event?.teams ?? [];
+
   return (
     <Screen padded={false}>
       <FlatList
@@ -230,23 +305,48 @@ export default function EventDetailScreen() {
               </Pressable>
             ) : null}
 
+            {eventTeams.length > 0 ? (
+              <View style={styles.teamsRow}>
+                {eventTeams.map((link) => (
+                  <View
+                    key={link.id}
+                    style={[styles.teamTag, { backgroundColor: link.team?.color ?? theme.colors.primary + '22' }]}
+                  >
+                    <Text style={[styles.teamTagText, { color: theme.app.text }]}>
+                      {link.team?.name ?? 'Equipe'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
             <View style={[styles.summary, { backgroundColor: theme.app.surfaceSunken }]}>
               <Text style={[styles.summaryValue, { color: theme.app.text }]}>
-                {summary.confirmed}/{summary.total}
+                {summary.scheduled}/{summary.total}
               </Text>
               <Text style={[styles.summaryLabel, { color: theme.app.textMuted }]}>
-                {summary.total === 0 ? 'ninguém escalado' : 'confirmaram presença'}
+                {summary.total === 0 ? 'ninguém escalado' : 'escalados'}
               </Text>
             </View>
+
+            {canManage && eventTeams.length > 0 ? (
+              <Button
+                mode="contained"
+                icon="auto-fix"
+                onPress={openAutoSchedule}
+                style={styles.autoScheduleBtn}
+                contentStyle={styles.autoScheduleContent}
+              >
+                Montar escala
+              </Button>
+            ) : null}
           </View>
         }
         ListEmptyComponent={
           <EmptyState
             icon="people-outline"
             title="Escala vazia"
-            description="Adicione pessoas para servir neste evento."
-            actionLabel={canManage() ? 'Escalar alguém' : undefined}
-            onAction={canManage() ? () => setFormOpen(true) : undefined}
+            description={canManage ? 'Toque em "Montar escala" para o motor escolher as pessoas.' : 'A escala deste evento ainda não foi montada.'}
           />
         }
         renderItem={({ item }) => (
@@ -267,9 +367,52 @@ export default function EventDetailScreen() {
         )}
       />
 
-      {canManage() ? (
+      {canManage ? (
         <FAB icon="account-plus" style={styles.fab} onPress={() => setFormOpen(true)} />
       ) : null}
+
+      {/* Auto-schedule: leader picks which roles to fill */}
+      <Sheet
+        visible={scheduleOpen}
+        onDismiss={() => setScheduleOpen(false)}
+        title="Montar escala"
+        subtitle="Marque as funções que precisa neste evento"
+        footer={
+          <>
+            <Button
+              mode="outlined"
+              onPress={() => setScheduleOpen(false)}
+              style={styles.sheetAction}
+            >
+              Cancelar
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleAutoSchedule}
+              loading={scheduling}
+              disabled={selectedRoleIds.size === 0 || scheduling}
+              style={styles.sheetAction}
+            >
+              Escalar
+            </Button>
+          </>
+        }
+      >
+        {eventTeamRoles.length === 0 ? (
+          <ActivityIndicator />
+        ) : (
+          <View style={styles.roleGrid}>
+            {eventTeamRoles.map((role) => (
+              <RoleChip
+                key={role.id}
+                label={role.name}
+                selected={selectedRoleIds.has(role.id)}
+                onPress={() => toggleRole(role.id)}
+              />
+            ))}
+          </View>
+        )}
+      </Sheet>
 
       <Sheet
         visible={occurrencesOpen}
@@ -379,6 +522,13 @@ const styles = StyleSheet.create({
   header: { paddingTop: spacing.lg, gap: spacing.xs },
   date: { fontFamily: fontFamily.bodyBold, fontSize: fontSize.sm, textTransform: 'capitalize' },
   location: { fontFamily: fontFamily.body, fontSize: fontSize.sm },
+  teamsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
+  teamTag: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  teamTagText: { fontFamily: fontFamily.bodyMedium, fontSize: fontSize.xs },
   summary: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -390,10 +540,13 @@ const styles = StyleSheet.create({
   },
   summaryValue: { fontFamily: fontFamily.display, fontSize: fontSize.xl },
   summaryLabel: { fontFamily: fontFamily.body, fontSize: fontSize.sm },
+  autoScheduleBtn: { borderRadius: radius.md, marginTop: spacing.sm },
+  autoScheduleContent: { paddingVertical: spacing.xs },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   info: { flex: 1, gap: 2 },
   memberName: { fontFamily: fontFamily.bodyBold, fontSize: fontSize.md },
   role: { fontFamily: fontFamily.body, fontSize: fontSize.sm },
+  roleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   sheetAction: { flex: 1, borderRadius: radius.md },
   repeat: {
     flexDirection: 'row',

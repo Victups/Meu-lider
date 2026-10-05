@@ -39,6 +39,8 @@ export default function NewEventScreen() {
     kind: 'none',
     weekday: nextHour().getDay(),
     position: 1,
+    refWeekday: 0,
+    offset: -1,
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

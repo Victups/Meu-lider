@@ -1,4 +1,4 @@
-import type { CreateScheduleInput, ID, Schedule, ScheduleStatistics } from '@/types';
+import type { AutoScheduleResult, CreateScheduleInput, ID, Schedule, ScheduleStatistics } from '@/types';
 import { http } from './http/client';
 
 export const schedulesService = {
@@ -59,6 +59,18 @@ export const schedulesService = {
   async statistics(churchId: ID, eventId: ID): Promise<ScheduleStatistics> {
     const { data } = await http.get<ScheduleStatistics>(
       `/churches/${churchId}/schedules/events/${eventId}/statistics`,
+    );
+    return data;
+  },
+
+  async autoSchedule(
+    churchId: ID,
+    eventId: ID,
+    options: { roleIds?: ID[]; dryRun?: boolean },
+  ): Promise<AutoScheduleResult> {
+    const { data } = await http.post<AutoScheduleResult>(
+      `/churches/${churchId}/events/${eventId}/auto-schedule`,
+      options,
     );
     return data;
   },
