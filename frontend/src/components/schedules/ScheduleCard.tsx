@@ -3,23 +3,26 @@ import { Button } from 'react-native-paper';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, StatusBadge } from '../ui';
+import { hasStarted, holdsSlot, statusLabel } from '../../lib/schedule';
 import { fontFamily, fontSize, radius, spacing } from '../../theme';
 import { useAppTheme } from '../../theme/use-app-theme';
 import type { Schedule } from '../../types';
 
 interface ScheduleCardProps {
   schedule: Schedule;
-  /** Offered only while the member still holds the slot. */
+  /** Offered only while the member still holds an upcoming slot. */
   onRequestRelease?: () => void;
+  /** Trade this date with a colleague, without going through a leader. */
+  onRequestSwap?: () => void;
   busy?: boolean;
 }
 
-export function ScheduleCard({ schedule, onRequestRelease, busy }: ScheduleCardProps) {
+export function ScheduleCard({ schedule, onRequestRelease, onRequestSwap, busy }: ScheduleCardProps) {
   const theme = useAppTheme();
   const { event, team, teamRole, status, releaseReason } = schedule;
 
   const eventDate = event ? new Date(event.eventDate) : null;
-  const holdsSlot = status === 'SCHEDULED' || status === 'CONFIRMED';
+  const canAct = holdsSlot(schedule) && !hasStarted(schedule);
   const awaitingLeader = status === 'RELEASE_REQUESTED';
 
   return (
@@ -35,7 +38,7 @@ export function ScheduleCard({ schedule, onRequestRelease, busy }: ScheduleCardP
             </Text>
           ) : null}
         </View>
-        <StatusBadge status={status} />
+        <StatusBadge status={status} label={statusLabel(schedule)} />
       </View>
 
       <View style={[styles.roleRow, { borderTopColor: theme.app.border }]}>
@@ -60,16 +63,31 @@ export function ScheduleCard({ schedule, onRequestRelease, busy }: ScheduleCardP
         </View>
       ) : null}
 
-      {holdsSlot && onRequestRelease ? (
-        <Button
-          mode="outlined"
-          onPress={onRequestRelease}
-          disabled={busy}
-          style={styles.action}
-          icon="calendar-remove-outline"
-        >
-          Não vou poder
-        </Button>
+      {canAct && (onRequestSwap || onRequestRelease) ? (
+        <View style={styles.actions}>
+          {onRequestSwap ? (
+            <Button
+              mode="contained-tonal"
+              onPress={onRequestSwap}
+              disabled={busy}
+              style={styles.action}
+              icon="swap-horizontal"
+            >
+              Trocar
+            </Button>
+          ) : null}
+          {onRequestRelease ? (
+            <Button
+              mode="outlined"
+              onPress={onRequestRelease}
+              disabled={busy}
+              style={styles.action}
+              icon="calendar-remove-outline"
+            >
+              Não vou poder
+            </Button>
+          ) : null}
+        </View>
       ) : null}
     </Card>
   );
@@ -93,5 +111,6 @@ const styles = StyleSheet.create({
   notice: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.sm, gap: 2 },
   noticeText: { fontFamily: fontFamily.bodyMedium, fontSize: fontSize.xs, lineHeight: 18 },
   noticeReason: { fontFamily: fontFamily.body, fontSize: fontSize.xs, fontStyle: 'italic' },
-  action: { marginTop: spacing.lg, borderRadius: radius.md },
+  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  action: { flex: 1, borderRadius: radius.md },
 });

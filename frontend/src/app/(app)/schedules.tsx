@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useRouter, type Href } from 'expo-router';
 import { ActivityIndicator, Button, Snackbar, TextInput } from 'react-native-paper';
 import { ScheduleCard } from '@/components/schedules/ScheduleCard';
 import { EmptyState, Screen, Sheet } from '@/components/ui';
@@ -13,6 +14,7 @@ import type { ID, Schedule } from '@/types';
 
 export default function SchedulesScreen() {
   const theme = useAppTheme();
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const currentChurch = useChurchStore((s) => s.currentChurch);
 
@@ -43,7 +45,20 @@ export default function SchedulesScreen() {
         return;
       }
 
-      setSchedules(await schedulesService.listByMember(currentChurch.id, me.id));
+      const mine = await schedulesService.listByMember(currentChurch.id, me.id);
+      // Cancelled rows are history; upcoming first so what matters is on top.
+      const now = Date.now();
+      const when = (s: Schedule) => new Date(s.event?.eventDate ?? 0).getTime();
+      setSchedules(
+        mine
+          .filter((s) => s.status !== 'CANCELLED')
+          .sort((a, b) => {
+            const aPast = when(a) < now;
+            const bPast = when(b) < now;
+            if (aPast !== bPast) return aPast ? 1 : -1;
+            return aPast ? when(b) - when(a) : when(a) - when(b);
+          }),
+      );
     } catch (err) {
       setError(toUserMessage(err));
     } finally {
@@ -122,6 +137,9 @@ export default function SchedulesScreen() {
           <ScheduleCard
             schedule={item}
             busy={actingOn === item.id}
+            onRequestSwap={() =>
+              router.push({ pathname: '/swap-request', params: { scheduleId: item.id } } as unknown as Href)
+            }
             onRequestRelease={() => {
               setReleasing(item);
               setReason('');
