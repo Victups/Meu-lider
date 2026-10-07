@@ -16,6 +16,7 @@ import { ChurchGuard, JwtAuthGuard, RolesGuard } from '../../common/guards';
 import type { AuthenticatedRequest } from '../../common/interfaces';
 import { CreateEventDto } from './dtos/create-event.dto';
 import { EventResponseDto } from './dtos/event-response.dto';
+import { LinkTeamDto } from './dtos/link-team.dto';
 import { UpdateEventDto } from './dtos/update-event.dto';
 import { EventsService } from './events.service';
 
@@ -45,7 +46,7 @@ export class EventsController {
     @Request() req: AuthenticatedRequest,
   ): Promise<EventResponseDto> {
     createEventDto.churchId = churchId;
-    return this.eventsService.create(createEventDto, req.user.id);
+    return this.eventsService.create(createEventDto, req.user);
   }
 
   @Get(':eventId')
@@ -58,8 +59,39 @@ export class EventsController {
   update(
     @Param('eventId') id: string,
     @Body() updateData: UpdateEventDto,
+    @Request() req: AuthenticatedRequest,
   ): Promise<EventResponseDto> {
-    return this.eventsService.update(id, updateData);
+    return this.eventsService.update(id, updateData, req.user);
+  }
+
+  /** A leader attaching their own team to the event; the roster builds itself. */
+  @Roles(...MANAGER_ROLES)
+  @Post(':eventId/teams/:teamId')
+  linkTeam(
+    @Param('churchId') churchId: string,
+    @Param('eventId') eventId: string,
+    @Param('teamId') teamId: string,
+    @Body() body: LinkTeamDto,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<EventResponseDto> {
+    return this.eventsService.linkTeam(
+      churchId,
+      eventId,
+      teamId,
+      body.applyToSeries === true,
+      req.user,
+    );
+  }
+
+  @Roles(...MANAGER_ROLES)
+  @Delete(':eventId/teams/:teamId')
+  unlinkTeam(
+    @Param('churchId') churchId: string,
+    @Param('eventId') eventId: string,
+    @Param('teamId') teamId: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<EventResponseDto> {
+    return this.eventsService.unlinkTeam(churchId, eventId, teamId, req.user);
   }
 
   @Roles(...MANAGER_ROLES)

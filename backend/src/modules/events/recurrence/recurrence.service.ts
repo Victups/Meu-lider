@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import {
@@ -14,6 +14,7 @@ import {
 } from '../../../common/exceptions';
 import type { JwtUser } from '../../../common/interfaces';
 import { addWeeks, endOfDay, startOfDay } from '../../../common/utils';
+import { LeaderNotificationsService } from '../../notifications/leader-notifications.service';
 import { AutoScheduleService } from '../../schedules/auto-schedule/auto-schedule.service';
 import { Event } from '../entities/event.entity';
 import { EventTeam } from '../entities/event-team.entity';
@@ -25,6 +26,11 @@ import {
 } from './dtos/occurrences-result.dto';
 import type { IRecurrenceService } from './interfaces';
 import { expandRecurrence, parseRecurrenceRule } from './recurrence.util';
+
+interface Announcement {
+  events: Event[];
+  teamIds: string[];
+}
 
 /**
  * "Os eventos constantes que vão sempre ter" — the Sunday service, the Thursday
@@ -46,12 +52,15 @@ import { expandRecurrence, parseRecurrenceRule } from './recurrence.util';
  */
 @Injectable()
 export class RecurrenceService implements IRecurrenceService {
+  private readonly logger = new Logger(RecurrenceService.name);
+
   constructor(
     @InjectRepository(Event)
     private readonly eventsRepository: Repository<Event>,
     @InjectRepository(EventTeam)
     private readonly eventTeamsRepository: Repository<EventTeam>,
     private readonly autoScheduleService: AutoScheduleService,
+    private readonly leaderNotifications: LeaderNotificationsService,
   ) {}
 
   async preview(
@@ -89,9 +98,12 @@ export class RecurrenceService implements IRecurrenceService {
         )
       : [];
 
-    if (created.length > 0) {
-      await this.copyTeamLinks(template.id, created.map((e) => e.id));
-    }
+    const linkedTeamIds =
+      created.length > 0
+        ? await this.copyTeamLinks(template.id, created.map((e) => e.id))
+        : [];
+
+    await this.announce(churchId, [{ events: created, teamIds: linkedTeamIds }], user.id);
 
     return {
       templateEventId: template.id,
@@ -213,6 +225,7 @@ export class RecurrenceService implements IRecurrenceService {
     const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
 
     const results: MaterializeOccurrencesResultDto[] = [];
+    const announcements: Announcement[] = [];
 
     for (const template of recurring) {
       const pattern = parseRecurrenceRule(template.recurrenceRule);
@@ -226,9 +239,11 @@ export class RecurrenceService implements IRecurrenceService {
           )
         : [];
 
-      if (created.length > 0) {
-        await this.copyTeamLinks(template.id, created.map((e) => e.id));
-      }
+      const linkedTeamIds =
+        created.length > 0
+          ? await this.copyTeamLinks(template.id, created.map((e) => e.id))
+          : [];
+      announcements.push({ events: created, teamIds: linkedTeamIds });
 
       const autoSchedule = created.length > 0
         ? await this.autoScheduleService.generateForEvents(
@@ -250,15 +265,21 @@ export class RecurrenceService implements IRecurrenceService {
       });
     }
 
+    await this.announce(churchId, announcements, user.id);
+
     return results;
   }
 
-  private async copyTeamLinks(templateEventId: string, occurrenceIds: string[]): Promise<void> {
+  /** Copies the template's teams onto its occurrences and returns which teams those are. */
+  private async copyTeamLinks(
+    templateEventId: string,
+    occurrenceIds: string[],
+  ): Promise<string[]> {
     const templateTeams = await this.eventTeamsRepository.find({
       where: { eventId: templateEventId },
     });
 
-    if (templateTeams.length === 0) return;
+    if (templateTeams.length === 0) return [];
 
     const links = occurrenceIds.flatMap((eventId) =>
       templateTeams.map((tl) =>
@@ -267,6 +288,47 @@ export class RecurrenceService implements IRecurrenceService {
     );
 
     await this.eventTeamsRepository.save(links);
+
+    return templateTeams.map((link) => link.teamId);
+  }
+
+  /**
+   * Leaders hear about the new dates once, however many events were created.
+   * Events already carrying teams only concern those teams' leaders; the rest
+   * are announced to every leader, who then links their team.
+   */
+  private async announce(
+    churchId: string,
+    announcements: Announcement[],
+    excludeUserId: string,
+  ): Promise<void> {
+    const linkedEvents = announcements.filter((a) => a.teamIds.length > 0 && a.events.length > 0);
+    const unlinkedEvents = announcements
+      .filter((a) => a.teamIds.length === 0)
+      .flatMap((a) => a.events);
+
+    try {
+      if (linkedEvents.length > 0) {
+        await this.leaderNotifications.notifyNewEvents({
+          churchId,
+          events: linkedEvents.flatMap((a) => a.events),
+          teamIds: [...new Set(linkedEvents.flatMap((a) => a.teamIds))],
+          excludeUserId,
+        });
+      }
+
+      if (unlinkedEvents.length > 0) {
+        await this.leaderNotifications.notifyNewEvents({
+          churchId,
+          events: unlinkedEvents,
+          excludeUserId,
+        });
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Não foi possível avisar os líderes: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   private assertCanManageSchedules(user: JwtUser): void {
