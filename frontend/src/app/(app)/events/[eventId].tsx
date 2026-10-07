@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
-import { ActivityIndicator, Button, FAB, Snackbar } from 'react-native-paper';
+import { ActivityIndicator, Button, FAB, Snackbar, Switch } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { SelectField } from '@/components/form';
 import { Avatar, Card, EmptyState, RoleChip, Screen, Sheet, StatusBadge } from '@/components/ui';
 import { toUserMessage } from '@/lib/errors';
+import { hasStarted, holdsSlot, statusLabel } from '@/lib/schedule';
 import { describeRecurrence, parseRecurrenceRule } from '@/lib/recurrence';
 import { eventsService, membersService, schedulesService, teamsService } from '@/services';
 import { useAuthStore } from '@/stores/auth';
@@ -53,46 +54,43 @@ export default function EventDetailScreen() {
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
   const [swapping, setSwapping] = useState(false);
 
-  // Detect if user leads any of the event's teams
-  const [leaderOfTeamIds, setLeaderOfTeamIds] = useState<Set<string>>(new Set());
+  // Teams the user leads (every team, for church admins)
+  const [ledTeams, setLedTeams] = useState<Team[]>([]);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [applyToSeries, setApplyToSeries] = useState(false);
+  const [linking, setLinking] = useState<string | null>(null);
 
-  const canManage = isAdmin() || leaderOfTeamIds.size > 0;
+  const eventTeamIds = new Set((event?.teams ?? []).map((link) => link.teamId));
+  const ledIds = new Set(ledTeams.map((team) => team.id));
+  const managedTeamIds = [...eventTeamIds].filter((id) => isAdmin() || ledIds.has(id));
+  const canManage = isAdmin() || managedTeamIds.length > 0;
+  const upcoming = event ? !hasStarted({ event }) : false;
+  const linkable = isAdmin() ? [] : ledTeams;
 
   const load = useCallback(async () => {
     if (!currentChurch || !eventId) return;
     try {
       setError(null);
-      const [loadedEvent, loadedSchedules, loadedTeams, loadedMembers] = await Promise.all([
+      const [loadedEvent, loadedSchedules, loadedTeams, loadedMembers, led] = await Promise.all([
         eventsService.getById(currentChurch.id, eventId),
         schedulesService.listByEvent(currentChurch.id, eventId),
         teamsService.list(currentChurch.id),
         membersService.list(currentChurch.id),
+        teamsService.listLed(currentChurch.id).catch(() => [] as Team[]),
       ]);
 
       setEvent(loadedEvent);
       setSchedules(loadedSchedules);
       setTeams(loadedTeams);
       setMembers(loadedMembers);
+      setLedTeams(led);
       navigation.setOptions({ title: loadedEvent.name });
-
-      // Check which event teams the user leads
-      if (user && loadedEvent.teams?.length) {
-        const leaderIds = new Set<string>();
-        for (const link of loadedEvent.teams) {
-          const teamMembers = await teamsService.listMembers(currentChurch.id, link.teamId).catch(() => []);
-          const isLeader = teamMembers.some(
-            (tm) => tm.isLeader && tm.member?.userId === user.id,
-          );
-          if (isLeader) leaderIds.add(link.teamId);
-        }
-        setLeaderOfTeamIds(leaderIds);
-      }
     } catch (err) {
       setError(toUserMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [currentChurch, eventId, navigation, user]);
+  }, [currentChurch, eventId, navigation]);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -173,10 +171,6 @@ export default function EventDetailScreen() {
     setEventTeamRoles([]);
     setSelectedRoleIds(new Set());
 
-    const managedTeamIds = isAdmin()
-      ? event.teams.map((t) => t.teamId)
-      : [...leaderOfTeamIds];
-
     const allRoles: TeamRole[] = [];
     for (const tId of managedTeamIds) {
       const teamRoles = await teamsService.listRoles(currentChurch.id, tId).catch(() => []);
@@ -212,6 +206,42 @@ export default function EventDetailScreen() {
       setToast(toUserMessage(err));
     } finally {
       setScheduling(false);
+    }
+  };
+
+  const toggleLink = async (team: Team) => {
+    if (!currentChurch || !eventId) return;
+    setLinking(team.id);
+    try {
+      if (eventTeamIds.has(team.id)) {
+        await eventsService.unlinkTeam(currentChurch.id, eventId, team.id);
+        setToast(`${team.name} saiu deste evento`);
+      } else {
+        await eventsService.linkTeam(currentChurch.id, eventId, team.id, applyToSeries);
+        setToast(`${team.name} vinculada: escala montada`);
+      }
+      await load();
+    } catch (err) {
+      setToast(toUserMessage(err));
+    } finally {
+      setLinking(null);
+    }
+  };
+
+  const handleAttendance = async (absent: boolean) => {
+    if (!currentChurch || !selectedSchedule) return;
+    setSwapping(true);
+    try {
+      await (absent
+        ? schedulesService.markNoShow(currentChurch.id, selectedSchedule.id)
+        : schedulesService.markAttended(currentChurch.id, selectedSchedule.id));
+      setSelectedSchedule(null);
+      setToast(absent ? 'Falta registrada' : 'Falta desfeita');
+      await load();
+    } catch (err) {
+      setToast(toUserMessage(err));
+    } finally {
+      setSwapping(false);
     }
   };
 
@@ -358,6 +388,23 @@ export default function EventDetailScreen() {
               </View>
             ) : null}
 
+            {linkable.length > 0 && upcoming ? (
+              <Pressable
+                onPress={() => setLinkOpen(true)}
+                style={[styles.repeat, { backgroundColor: theme.colors.primaryContainer }]}
+              >
+                <Ionicons name="people-outline" size={16} color={theme.colors.onPrimaryContainer} />
+                <Text style={[styles.repeatText, { color: theme.colors.onPrimaryContainer }]}>
+                  {linkable.some((team) => !eventTeamIds.has(team.id))
+                    ? 'Sua equipe ainda não está neste evento'
+                    : 'Gerenciar a participação da sua equipe'}
+                </Text>
+                <Text style={[styles.repeatAction, { color: theme.colors.primary }]}>
+                  {linkable.some((team) => !eventTeamIds.has(team.id)) ? 'Vincular' : 'Abrir'}
+                </Text>
+              </Pressable>
+            ) : null}
+
             <View style={[styles.summary, { backgroundColor: theme.app.surfaceSunken }]}>
               <Text style={[styles.summaryValue, { color: theme.app.text }]}>
                 {summary.scheduled}/{summary.total}
@@ -389,7 +436,11 @@ export default function EventDetailScreen() {
         }
         renderItem={({ item }) => (
           <Pressable
-            onPress={canManage && item.status !== 'CANCELLED' ? () => setSelectedSchedule(item) : undefined}
+            onPress={
+              (isAdmin() || ledIds.has(item.teamId)) && item.status !== 'CANCELLED'
+                ? () => setSelectedSchedule(item)
+                : undefined
+            }
           >
             <Card accentColor={item.team?.color}>
               <View style={styles.row}>
@@ -402,7 +453,7 @@ export default function EventDetailScreen() {
                     {item.team?.name ?? 'Equipe'} · {item.teamRole?.name ?? 'Função'}
                   </Text>
                 </View>
-                <StatusBadge status={item.status} />
+                <StatusBadge status={item.status} label={statusLabel({ ...item, event: item.event ?? event ?? undefined })} />
               </View>
             </Card>
           </Pressable>
@@ -551,6 +602,41 @@ export default function EventDetailScreen() {
         />
       </Sheet>
 
+      {/* A leader attaching (or removing) their own team */}
+      <Sheet
+        visible={linkOpen}
+        onDismiss={() => setLinkOpen(false)}
+        title="Sua equipe neste evento"
+        subtitle="Ao vincular, a escala da equipe é montada na hora."
+        footer={
+          <Button mode="outlined" onPress={() => setLinkOpen(false)} style={styles.sheetAction}>
+            Fechar
+          </Button>
+        }
+      >
+        {event?.recurrenceRule === null && event?.name ? (
+          <View style={styles.switchRow}>
+            <Text style={[styles.switchText, { color: theme.app.text }]}>
+              Repetir para as próximas datas de "{event.name}"
+            </Text>
+            <Switch value={applyToSeries} onValueChange={setApplyToSeries} />
+          </View>
+        ) : null}
+        {linkable.map((team) => (
+          <Button
+            key={team.id}
+            mode={eventTeamIds.has(team.id) ? 'outlined' : 'contained'}
+            icon={eventTeamIds.has(team.id) ? 'link-off' : 'link-variant'}
+            loading={linking === team.id}
+            disabled={linking !== null}
+            onPress={() => toggleLink(team)}
+            style={styles.actionBtn}
+          >
+            {eventTeamIds.has(team.id) ? `Desvincular ${team.name}` : `Vincular ${team.name}`}
+          </Button>
+        ))}
+      </Sheet>
+
       {/* Schedule action sheet */}
       <Sheet
         visible={selectedSchedule !== null}
@@ -567,16 +653,43 @@ export default function EventDetailScreen() {
           </Button>
         }
       >
-        <Button
-          mode="contained"
-          icon="swap-horizontal"
-          onPress={handleSwap}
-          loading={swapping}
-          disabled={swapping}
-          style={styles.actionBtn}
-        >
-          Trocar pessoa
-        </Button>
+        {selectedSchedule && !upcoming && holdsSlot(selectedSchedule) ? (
+          <Button
+            mode="contained"
+            icon="account-alert-outline"
+            onPress={() => handleAttendance(true)}
+            loading={swapping}
+            disabled={swapping}
+            buttonColor={theme.colors.error}
+            style={styles.actionBtn}
+          >
+            Marcar falta
+          </Button>
+        ) : null}
+        {selectedSchedule?.status === 'NO_SHOW' ? (
+          <Button
+            mode="contained"
+            icon="account-check-outline"
+            onPress={() => handleAttendance(false)}
+            loading={swapping}
+            disabled={swapping}
+            style={styles.actionBtn}
+          >
+            Desfazer falta (esteve presente)
+          </Button>
+        ) : null}
+        {upcoming ? (
+          <Button
+            mode="contained"
+            icon="swap-horizontal"
+            onPress={handleSwap}
+            loading={swapping}
+            disabled={swapping}
+            style={styles.actionBtn}
+          >
+            Trocar pessoa
+          </Button>
+        ) : null}
         <Button
           mode="outlined"
           icon="account-remove"
@@ -642,4 +755,6 @@ const styles = StyleSheet.create({
   repeatAction: { fontFamily: fontFamily.bodyBold, fontSize: fontSize.xs },
   previewDate: { fontFamily: fontFamily.body, fontSize: fontSize.sm, textTransform: 'capitalize' },
   fab: { position: 'absolute', right: spacing.lg, bottom: spacing.lg },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  switchText: { flex: 1, fontFamily: fontFamily.body, fontSize: fontSize.sm },
 });

@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter, type Href } from 'expo-router';
 import { ActivityIndicator, Button, FAB, IconButton, Snackbar, TextInput } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { SelectField } from '@/components/form';
+import { ShareScheduleSheet } from '@/components/schedules/ShareScheduleSheet';
 import { Avatar, Card, EmptyState, RoleChip, Screen, Sheet } from '@/components/ui';
 import { toUserMessage } from '@/lib/errors';
 import { membersService, teamsService } from '@/services';
@@ -18,6 +19,7 @@ type RolesByMember = Record<ID, TeamRole[]>;
 export default function TeamDetailScreen() {
   const theme = useAppTheme();
   const navigation = useNavigation();
+  const router = useRouter();
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const currentChurch = useChurchStore((s) => s.currentChurch);
   const user = useAuthStore((s) => s.user);
@@ -43,6 +45,7 @@ export default function TeamDetailScreen() {
   const [removingMember, setRemovingMember] = useState<TeamMember | null>(null);
   const [saving, setSaving] = useState(false);
   const [filterRoleIds, setFilterRoleIds] = useState<Set<string>>(new Set());
+  const [shareOpen, setShareOpen] = useState(false);
 
   const isLeaderOfThisTeam = useMemo(() => {
     if (!user) return false;
@@ -175,6 +178,15 @@ export default function TeamDetailScreen() {
     }
   };
 
+  /** Only admins appoint leaders; a person may lead several teams and just belong to others. */
+  const toggleLeader = (entry: TeamMember) => {
+    if (!currentChurch || !teamId) return;
+    return runAction(
+      () => teamsService.setLeader(currentChurch.id, teamId, entry.memberId, !entry.isLeader),
+      entry.isLeader ? 'Deixou de ser líder' : 'Agora é líder da equipe',
+    );
+  };
+
   const toggleMemberRole = async (entry: TeamMember, role: TeamRole) => {
     if (!currentChurch || !teamId) return;
     const current = memberRoles[entry.memberId] ?? [];
@@ -223,6 +235,29 @@ export default function TeamDetailScreen() {
           <Text style={[styles.description, { color: theme.app.textMuted }]}>
             {team.description}
           </Text>
+        ) : null}
+
+        {canManage ? (
+          <View style={styles.quickActions}>
+            <Button
+              mode="contained-tonal"
+              icon="email-plus-outline"
+              onPress={() =>
+                router.push({ pathname: '/invitations', params: { teamId } } as unknown as Href)
+              }
+              style={styles.action}
+            >
+              Convidar
+            </Button>
+            <Button
+              mode="contained-tonal"
+              icon="share-variant"
+              onPress={() => setShareOpen(true)}
+              style={styles.action}
+            >
+              Compartilhar escala
+            </Button>
+          </View>
         ) : null}
 
         <View style={styles.section}>
@@ -289,6 +324,14 @@ export default function TeamDetailScreen() {
 
                     {canManage ? (
                       <View style={styles.actions}>
+                        {isAdmin() ? (
+                          <IconButton
+                            icon={entry.isLeader ? 'shield-account' : 'shield-account-outline'}
+                            size={20}
+                            iconColor={entry.isLeader ? theme.colors.primary : undefined}
+                            onPress={() => toggleLeader(entry)}
+                          />
+                        ) : null}
                         {roles.length > 0 ? (
                           <IconButton
                             icon="swap-horizontal"
@@ -462,6 +505,16 @@ export default function TeamDetailScreen() {
         </View>
       </Sheet>
 
+      {currentChurch && team ? (
+        <ShareScheduleSheet
+          visible={shareOpen}
+          onDismiss={() => setShareOpen(false)}
+          churchId={currentChurch.id}
+          teams={[team]}
+          onError={setToast}
+        />
+      ) : null}
+
       <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={2500}>
         {toast ?? ''}
       </Snackbar>
@@ -474,6 +527,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: 96, gap: spacing.xl },
   description: { fontFamily: fontFamily.body, fontSize: fontSize.sm, lineHeight: 20 },
   section: { gap: spacing.md },
+  quickActions: { flexDirection: 'row', gap: spacing.sm },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { fontFamily: fontFamily.displayMedium, fontSize: fontSize.lg },
   hint: { fontFamily: fontFamily.body, fontSize: fontSize.sm, lineHeight: 20 },
