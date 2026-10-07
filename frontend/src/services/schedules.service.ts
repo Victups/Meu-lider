@@ -1,9 +1,22 @@
-import type { AutoScheduleResult, CreateScheduleInput, ID, Schedule, ScheduleStatistics } from '@/types';
+import type {
+  AutoScheduleResult,
+  CreateScheduleInput,
+  ID,
+  MemberParticipation,
+  Schedule,
+  ScheduleStatistics,
+  ShareText,
+} from '@/types';
 import { http } from './http/client';
 
 export const schedulesService = {
   async listByEvent(churchId: ID, eventId: ID): Promise<Schedule[]> {
     const { data } = await http.get<Schedule[]>(`/churches/${churchId}/schedules/events/${eventId}`);
+    return data;
+  },
+
+  async getById(churchId: ID, scheduleId: ID): Promise<Schedule> {
+    const { data } = await http.get<Schedule>(`/churches/${churchId}/schedules/${scheduleId}`);
     return data;
   },
 
@@ -49,6 +62,32 @@ export const schedulesService = {
       `/churches/${churchId}/schedules/${scheduleId}/release`,
       { reason },
     );
+    return data;
+  },
+
+  /** Everyone counts as present once the event happened; a leader only records the absence. */
+  async markNoShow(churchId: ID, scheduleId: ID): Promise<Schedule> {
+    const { data } = await http.post<Schedule>(`/churches/${churchId}/schedules/${scheduleId}/no-show`);
+    return data;
+  },
+
+  async markAttended(churchId: ID, scheduleId: ID): Promise<Schedule> {
+    const { data } = await http.post<Schedule>(`/churches/${churchId}/schedules/${scheduleId}/attended`);
+    return data;
+  },
+
+  /** The month's roster as WhatsApp-ready text. `month` is YYYY-MM. */
+  async shareText(churchId: ID, month: string, teamId?: ID): Promise<ShareText> {
+    const { data } = await http.get<ShareText>(`/churches/${churchId}/schedule-share`, {
+      params: { month, teamId },
+    });
+    return data;
+  },
+
+  async participation(churchId: ID, from: Date, to: Date): Promise<MemberParticipation[]> {
+    const { data } = await http.get<MemberParticipation[]>(`/churches/${churchId}/reports/participation`, {
+      params: { from: from.toISOString(), to: to.toISOString() },
+    });
     return data;
   },
 

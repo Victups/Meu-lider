@@ -15,6 +15,12 @@ export const teamsService = {
     return data;
   },
 
+  /** Teams the user leads (every team, for church admins). */
+  async listLed(churchId: ID): Promise<Team[]> {
+    const { data } = await http.get<Team[]>(`/churches/${churchId}/teams/led`);
+    return data;
+  },
+
   async getById(churchId: ID, teamId: ID): Promise<Team> {
     const { data } = await http.get<Team>(`/churches/${churchId}/teams/${teamId}`);
     return data;
@@ -44,6 +50,15 @@ export const teamsService = {
 
   async removeMember(churchId: ID, teamId: ID, memberId: ID): Promise<void> {
     await http.delete(`/churches/${churchId}/teams/${teamId}/members/${memberId}`);
+  },
+
+  /** Admin only. A person may lead several teams. */
+  async setLeader(churchId: ID, teamId: ID, memberId: ID, isLeader: boolean): Promise<TeamMember> {
+    const { data } = await http.put<TeamMember>(
+      `/churches/${churchId}/teams/${teamId}/members/${memberId}/leader`,
+      { isLeader },
+    );
+    return data;
   },
 
   async listRoles(churchId: ID, teamId: ID): Promise<TeamRole[]> {

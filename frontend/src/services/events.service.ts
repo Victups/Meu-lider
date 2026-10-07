@@ -68,6 +68,19 @@ export const eventsService = {
     return data;
   },
 
+  /** A leader attaches their team; `applyToSeries` repeats it for every upcoming date of the event. */
+  async linkTeam(churchId: ID, eventId: ID, teamId: ID, applyToSeries = false): Promise<Event> {
+    const { data } = await http.post<Event>(`/churches/${churchId}/events/${eventId}/teams/${teamId}`, {
+      applyToSeries,
+    });
+    return data;
+  },
+
+  async unlinkTeam(churchId: ID, eventId: ID, teamId: ID): Promise<Event> {
+    const { data } = await http.delete<Event>(`/churches/${churchId}/events/${eventId}/teams/${teamId}`);
+    return data;
+  },
+
   async remove(churchId: ID, eventId: ID): Promise<void> {
     await http.delete(`/churches/${churchId}/events/${eventId}`);
   },
