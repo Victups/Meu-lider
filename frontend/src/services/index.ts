@@ -4,6 +4,8 @@ export { churchesService } from './churches.service';
 export { eventsService } from './events.service';
 export { membersService } from './members.service';
 export { notificationsService } from './notifications.service';
+export { invitationsService } from './invitations.service';
 export { schedulesService } from './schedules.service';
+export { swapsService } from './swaps.service';
 export { teamsService } from './teams.service';
 export { onSessionExpired } from './http/client';
