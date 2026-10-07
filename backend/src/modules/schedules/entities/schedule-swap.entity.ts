@@ -37,6 +37,13 @@ export class ScheduleSwap {
   @Column({ type: 'uuid', nullable: true })
   acceptedByMemberId: string | null;
 
+  /**
+   * Set for a day exchange: the requester offers `scheduleId` and wants the
+   * target's `counterScheduleId` in return. Null for a plain hand-over.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  counterScheduleId: string | null;
+
   @Column({ type: 'enum', enum: SwapStatus, default: SwapStatus.OPEN })
   status: SwapStatus;
 
@@ -60,4 +67,7 @@ export class ScheduleSwap {
 
   @ManyToOne(() => Member, { onDelete: 'SET NULL', nullable: true })
   acceptedByMember: Member | null;
+
+  @ManyToOne(() => Schedule, { onDelete: 'CASCADE', nullable: true })
+  counterSchedule: Schedule | null;
 }

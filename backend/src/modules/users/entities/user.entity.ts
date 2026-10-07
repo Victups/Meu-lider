@@ -44,7 +44,7 @@ export class User {
   active: boolean;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  expoPushToken: string;
+  expoPushToken: string | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   lastLoginAt: Date;
