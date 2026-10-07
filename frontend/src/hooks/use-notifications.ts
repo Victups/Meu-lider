@@ -1,76 +1,87 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
+import { notificationRoute } from '@/lib/notification-route';
 import { notificationsService } from '@/services';
 import { useAuthStore } from '@/stores/auth';
+import { useNotificationsStore } from '@/stores/notifications';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+const isNative = Platform.OS !== 'web';
 
+if (isNative) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
+
+/** Asks for permission (iOS/Android show their own dialog) and returns the Expo push token. */
 async function getExpoPushToken(): Promise<string | null> {
-  if (!Device.isDevice) return null;
+  if (!isNative || !Device.isDevice) return null;
 
   const { status: existing } = await Notifications.getPermissionsAsync();
-  let finalStatus = existing;
-
-  if (existing !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== 'granted') return null;
+  const status =
+    existing === 'granted' ? existing : (await Notifications.requestPermissionsAsync()).status;
+  if (status !== 'granted') return null;
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
       name: 'Padrão',
       importance: Notifications.AndroidImportance.HIGH,
-      sound: 'default',
       vibrationPattern: [0, 250, 250, 250],
     });
   }
 
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-  const tokenData = await Notifications.getExpoPushTokenAsync({
-    projectId: projectId as string,
-  });
-
-  return tokenData.data;
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
+  return (await Notifications.getExpoPushTokenAsync({ projectId })).data;
 }
 
+/**
+ * Wires push for the signed-in user: registers this device (again whenever the
+ * account changes), keeps the unread badge fresh and opens the right screen when
+ * a notification is tapped.
+ */
 export function useNotifications() {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
-  const registeredRef = useRef(false);
+  const userId = useAuthStore((s) => s.user?.id);
+  const refreshUnread = useNotificationsStore((s) => s.refresh);
 
   useEffect(() => {
-    if (!user || registeredRef.current) return;
+    if (!userId) return;
 
-    getExpoPushToken().then((token) => {
-      if (token) {
-        notificationsService.registerPushToken(token).catch(() => {});
-        registeredRef.current = true;
-      }
-    });
-  }, [user]);
+    refreshUnread();
+    getExpoPushToken()
+      .then((token) => (token ? notificationsService.registerPushToken(token) : undefined))
+      .catch(() => undefined);
+  }, [userId, refreshUnread]);
 
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      if (data?.screen === 'event' && data?.eventId) {
-        router.push(`/(app)/events/${data.eventId}`);
-      }
-    });
+    if (!isNative || !userId) return;
 
-    return () => sub.remove();
-  }, [router]);
+    const open = (response: Notifications.NotificationResponse) => {
+      const data = response.notification.request.content.data as
+        | { type?: string; eventId?: string }
+        | undefined;
+      router.push(notificationRoute(data?.type, data?.eventId));
+    };
+
+    // Opened the app from a tap while it was closed.
+    Notifications.getLastNotificationResponseAsync().then((last) => last && open(last));
+
+    const tapped = Notifications.addNotificationResponseReceivedListener(open);
+    const received = Notifications.addNotificationReceivedListener(() => refreshUnread());
+
+    return () => {
+      tapped.remove();
+      received.remove();
+    };
+  }, [userId, router, refreshUnread]);
 }
