@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { AvailabilityModule } from './modules/availability/availability.module';
 import { ChurchesModule } from './modules/churches/churches.module';
 import { EventsModule } from './modules/events/events.module';
+import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MembersModule } from './modules/members/members.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SchedulesModule } from './modules/schedules/schedules.module';
@@ -33,6 +34,7 @@ import { TeamsModule } from './modules/teams/teams.module';
     SchedulesModule,
     AvailabilityModule,
     NotificationsModule,
+    InvitationsModule,
   ],
 })
 export class AppModule {}
