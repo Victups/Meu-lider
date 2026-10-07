@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Availability } from '../availability/entities/availability.entity';
 import { WeekdayAvailability } from '../availability/entities/weekday-availability.entity';
+import { Church } from '../churches/entities/church.entity';
 import { Member } from '../members/entities/member.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { Team } from '../teams/entities/team.entity';
 import { TeamMember } from '../teams/entities/team-member.entity';
 import { TeamRole } from '../teams/entities/team-role.entity';
 import { Event } from '../events/entities/event.entity';
@@ -14,6 +16,10 @@ import { SchedulesService } from './schedules.service';
 import { SchedulesController } from './schedules.controller';
 import { AutoScheduleController } from './auto-schedule/auto-schedule.controller';
 import { AutoScheduleService } from './auto-schedule/auto-schedule.service';
+import { ScheduleReportsController } from './reports/schedule-reports.controller';
+import { ScheduleReportsService } from './reports/schedule-reports.service';
+import { ScheduleShareController } from './share/schedule-share.controller';
+import { ScheduleShareService } from './share/schedule-share.service';
 import { ScheduleSwapsController } from './swaps/schedule-swaps.controller';
 import { ScheduleSwapsService } from './swaps/schedule-swaps.service';
 
@@ -30,10 +36,18 @@ import { ScheduleSwapsService } from './swaps/schedule-swaps.service';
       Availability,
       WeekdayAvailability,
       Event,
+      Church,
+      Team,
     ]),
   ],
-  controllers: [SchedulesController, AutoScheduleController, ScheduleSwapsController],
-  providers: [SchedulesService, AutoScheduleService, ScheduleSwapsService],
+  controllers: [
+    SchedulesController,
+    AutoScheduleController,
+    ScheduleSwapsController,
+    ScheduleShareController,
+    ScheduleReportsController,
+  ],
+  providers: [SchedulesService, AutoScheduleService, ScheduleSwapsService, ScheduleShareService, ScheduleReportsService],
   exports: [SchedulesService, AutoScheduleService, ScheduleSwapsService],
 })
 export class SchedulesModule {}
