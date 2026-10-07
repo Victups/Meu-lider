@@ -9,6 +9,11 @@ export const notificationsService = {
     return data;
   },
 
+  async unreadCount(): Promise<number> {
+    const { data } = await http.get<{ count: number }>('/notifications/unread-count');
+    return data.count;
+  },
+
   async markAsRead(notificationId: ID): Promise<Notification> {
     const { data } = await http.put<Notification>(`/notifications/${notificationId}/read`);
     return data;
