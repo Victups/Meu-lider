@@ -1,33 +1,93 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Button, Divider, List } from 'react-native-paper';
+import { useRouter, type Href } from 'expo-router';
+import { Button, Divider, HelperText, List, Snackbar, TextInput } from 'react-native-paper';
 import { Avatar, Screen, Sheet } from '@/components/ui';
+import { toUserMessage } from '@/lib/errors';
+import { authService } from '@/services';
 import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
-import { USER_ROLE_LABEL } from '@/types';
+import { USER_ROLE_LABEL, canManageSomeTeam, canSeeAllRosters } from '@/types';
+
+const MIN_PASSWORD_LENGTH = 8;
+
+type Panel = 'signOut' | 'profile' | 'password' | null;
 
 export default function ProfileScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { user, signOut } = useAuthStore();
+  const { user, signOut, setUser } = useAuthStore();
   const currentChurch = useChurchStore((s) => s.currentChurch);
 
-  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
+  const [panel, setPanel] = useState<Panel>(null);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const handleSignOut = async () => {
-    setSigningOut(true);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+
+  const isLeader = user ? canManageSomeTeam(user.role) : false;
+  const canSeeReports = user ? isLeader || canSeeAllRosters(user.role) : false;
+  const go = (path: string) => router.push(path as Href);
+
+  const run = async (action: () => Promise<void>, done?: string) => {
+    setBusy(true);
     try {
-      await signOut();
-      router.replace('/(auth)/login');
+      await action();
+      setPanel(null);
+      if (done) setToast(done);
+    } catch (err) {
+      setToast(toUserMessage(err));
     } finally {
-      setSigningOut(false);
-      setConfirmingSignOut(false);
+      setBusy(false);
     }
   };
+
+  const openProfile = () => {
+    setName(user?.name ?? '');
+    setPhone(user?.phone ?? '');
+    setPanel('profile');
+  };
+
+  const openPassword = () => {
+    setCurrent('');
+    setNext('');
+    setConfirmation('');
+    setPanel('password');
+  };
+
+  const saveProfile = () =>
+    run(async () => setUser(await authService.updateProfile({ name: name.trim(), phone: phone.trim() })), 'Perfil atualizado');
+
+  const savePassword = () =>
+    run(
+      () => authService.changePassword({ currentPassword: current, newPassword: next }),
+      'Senha alterada. Os outros aparelhos precisarão entrar de novo.',
+    );
+
+  const handleSignOut = () =>
+    run(async () => {
+      await signOut();
+      router.replace('/(auth)/login');
+    });
+
+  const passwordTooShort = next.length > 0 && next.length < MIN_PASSWORD_LENGTH;
+  const mismatch = confirmation.length > 0 && confirmation !== next;
+
+  const item = (title: string, description: string, icon: string, onPress: () => void) => (
+    <List.Item
+      title={title}
+      description={description}
+      left={(props) => <List.Icon {...props} icon={icon} />}
+      right={(props) => <List.Icon {...props} icon="chevron-right" />}
+      onPress={onPress}
+    />
+  );
 
   return (
     <Screen scroll>
@@ -37,43 +97,42 @@ export default function ProfileScreen() {
           <Text style={[styles.name, { color: theme.app.text }]}>{user?.name}</Text>
           <Text style={[styles.email, { color: theme.app.textMuted }]}>{user?.email}</Text>
           {user ? (
-            <Text style={[styles.role, { color: theme.colors.primary }]}>
-              {USER_ROLE_LABEL[user.role]}
-            </Text>
+            <Text style={[styles.role, { color: theme.colors.primary }]}>{USER_ROLE_LABEL[user.role]}</Text>
           ) : null}
         </View>
       </View>
 
-      {currentChurch ? (
-        <List.Section>
-          <List.Subheader>Igreja</List.Subheader>
-          <List.Item
-            title={currentChurch.name}
-            description={currentChurch.description ?? 'Ver e editar os dados da igreja'}
-            left={(props) => <List.Icon {...props} icon="church" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => router.push('/church-settings')}
-          />
-        </List.Section>
-      ) : null}
-
-      <Divider />
-
       <List.Section>
         <List.Subheader>Conta</List.Subheader>
-        <List.Item
-          title="Minha disponibilidade"
-          description="Avise quando não puder servir"
-          left={(props) => <List.Icon {...props} icon="calendar-remove-outline" />}
-          right={(props) => <List.Icon {...props} icon="chevron-right" />}
-          onPress={() => router.push('/availability')}
-        />
+        {item('Editar perfil', 'Nome e telefone', 'account-edit-outline', openProfile)}
+        {item('Alterar senha', 'Troque a senha de acesso', 'lock-outline', openPassword)}
+        {item('Minha disponibilidade', 'Avise quando não puder servir', 'calendar-remove-outline', () => go('/availability'))}
+        {item('Trocas com colegas', 'Pedidos enviados e recebidos', 'swap-horizontal', () => go('/swaps'))}
       </List.Section>
+
+      {isLeader || canSeeReports || currentChurch ? (
+        <>
+          <Divider />
+          <List.Section>
+            <List.Subheader>Igreja</List.Subheader>
+            {currentChurch
+              ? item(
+                  currentChurch.name,
+                  currentChurch.description ?? 'Ver e editar os dados da igreja',
+                  'church',
+                  () => go('/church-settings'),
+                )
+              : null}
+            {isLeader ? item('Convidar pessoas', 'Gere um código curto para mandar no WhatsApp', 'email-plus-outline', () => go('/invitations')) : null}
+            {canSeeReports ? item('Relatórios', 'Quem serviu, faltas e escalas a vir', 'chart-bar', () => go('/reports')) : null}
+          </List.Section>
+        </>
+      ) : null}
 
       <Button
         mode="outlined"
         textColor={theme.colors.error}
-        onPress={() => setConfirmingSignOut(true)}
+        onPress={() => setPanel('signOut')}
         style={styles.signOut}
         icon="logout"
       >
@@ -81,26 +140,16 @@ export default function ProfileScreen() {
       </Button>
 
       <Sheet
-        visible={confirmingSignOut}
-        onDismiss={() => setConfirmingSignOut(false)}
+        visible={panel === 'signOut'}
+        onDismiss={() => setPanel(null)}
         title="Sair da conta?"
         subtitle="Você precisará entrar novamente para ver suas escalas."
         footer={
           <>
-            <Button
-              mode="outlined"
-              onPress={() => setConfirmingSignOut(false)}
-              style={styles.sheetAction}
-            >
+            <Button mode="outlined" onPress={() => setPanel(null)} style={styles.sheetAction}>
               Cancelar
             </Button>
-            <Button
-              mode="contained"
-              onPress={handleSignOut}
-              loading={signingOut}
-              buttonColor={theme.colors.error}
-              style={styles.sheetAction}
-            >
+            <Button mode="contained" onPress={handleSignOut} loading={busy} buttonColor={theme.colors.error} style={styles.sheetAction}>
               Sair
             </Button>
           </>
@@ -108,6 +157,67 @@ export default function ProfileScreen() {
       >
         <View />
       </Sheet>
+
+      <Sheet
+        visible={panel === 'profile'}
+        onDismiss={() => setPanel(null)}
+        title="Editar perfil"
+        footer={
+          <>
+            <Button mode="outlined" onPress={() => setPanel(null)} style={styles.sheetAction}>
+              Cancelar
+            </Button>
+            <Button
+              mode="contained"
+              onPress={saveProfile}
+              loading={busy}
+              disabled={busy || name.trim().length < 3}
+              style={styles.sheetAction}
+            >
+              Salvar
+            </Button>
+          </>
+        }
+      >
+        <TextInput mode="outlined" label="Nome completo" value={name} onChangeText={setName} autoComplete="name" />
+        <TextInput mode="outlined" label="Telefone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" maxLength={20} />
+      </Sheet>
+
+      <Sheet
+        visible={panel === 'password'}
+        onDismiss={() => setPanel(null)}
+        title="Alterar senha"
+        footer={
+          <>
+            <Button mode="outlined" onPress={() => setPanel(null)} style={styles.sheetAction}>
+              Cancelar
+            </Button>
+            <Button
+              mode="contained"
+              onPress={savePassword}
+              loading={busy}
+              disabled={busy || !current || next.length < MIN_PASSWORD_LENGTH || mismatch || confirmation !== next}
+              style={styles.sheetAction}
+            >
+              Alterar
+            </Button>
+          </>
+        }
+      >
+        <TextInput mode="outlined" label="Senha atual" value={current} onChangeText={setCurrent} secureTextEntry autoComplete="current-password" />
+        <TextInput mode="outlined" label="Nova senha" value={next} onChangeText={setNext} secureTextEntry autoComplete="new-password" />
+        <HelperText type={passwordTooShort ? 'error' : 'info'} visible>
+          Mínimo de {MIN_PASSWORD_LENGTH} caracteres
+        </HelperText>
+        <TextInput mode="outlined" label="Confirmar nova senha" value={confirmation} onChangeText={setConfirmation} secureTextEntry error={mismatch} />
+        <HelperText type="error" visible={mismatch}>
+          As senhas não conferem
+        </HelperText>
+      </Sheet>
+
+      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3500}>
+        {toast ?? ''}
+      </Snackbar>
     </Screen>
   );
 }
