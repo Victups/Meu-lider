@@ -66,6 +66,12 @@ export const SCHEDULE_GAP_MESSAGES: Record<ScheduleGapReason, string> = {
     'Não há membros disponíveis suficientes para preencher todas as vagas',
 };
 
+/**
+ * Events without an end time are assumed to last this long when checking whether
+ * two of them overlap — nobody can serve in two places at once.
+ */
+export const DEFAULT_EVENT_DURATION_HOURS = 2;
+
 /** How far ahead occurrences of a recurring event are materialized by default. */
 export const RECURRENCE_DEFAULT_WEEKS_AHEAD = 8;
 

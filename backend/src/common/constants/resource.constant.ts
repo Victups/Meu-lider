@@ -10,6 +10,7 @@ export enum ResourceType {
   SCHEDULE_SWAP = 'SCHEDULE_SWAP',
   AVAILABILITY = 'AVAILABILITY',
   NOTIFICATION = 'NOTIFICATION',
+  INVITATION = 'INVITATION',
 }
 
 export const RESOURCE_NOT_FOUND_MESSAGES: Record<ResourceType, string> = {
@@ -24,4 +25,5 @@ export const RESOURCE_NOT_FOUND_MESSAGES: Record<ResourceType, string> = {
   [ResourceType.SCHEDULE_SWAP]: 'Pedido de troca não encontrado',
   [ResourceType.AVAILABILITY]: 'Disponibilidade não encontrada',
   [ResourceType.NOTIFICATION]: 'Notificação não encontrada',
+  [ResourceType.INVITATION]: 'Convite não encontrado',
 };
