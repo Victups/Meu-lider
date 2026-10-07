@@ -5,16 +5,18 @@ import { SCHEDULE_STATUS_LABEL, type ScheduleStatus } from '../../types/schedule
 
 interface StatusBadgeProps {
   status: ScheduleStatus;
+  /** Overrides the default wording, e.g. "Presente" once the event happened. */
+  label?: string;
 }
 
-export function StatusBadge({ status }: StatusBadgeProps) {
+export function StatusBadge({ status, label }: StatusBadgeProps) {
   const theme = useAppTheme();
   const tone = theme.app.status[status];
 
   return (
     <View style={[styles.badge, { backgroundColor: tone.bg }]}>
       <View style={[styles.dot, { backgroundColor: tone.fg }]} />
-      <Text style={[styles.label, { color: tone.fg }]}>{SCHEDULE_STATUS_LABEL[status]}</Text>
+      <Text style={[styles.label, { color: tone.fg }]}>{label ?? SCHEDULE_STATUS_LABEL[status]}</Text>
     </View>
   );
 }
