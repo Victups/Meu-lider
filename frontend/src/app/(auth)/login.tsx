@@ -95,6 +95,13 @@ export default function LoginScreen() {
             }
           />
 
+          <Link
+            href={'/(auth)/forgot-password' as never}
+            style={[styles.forgot, { color: theme.colors.primary }]}
+          >
+            Esqueci minha senha
+          </Link>
+
           <Button
             mode="contained"
             onPress={handleSubmit}
@@ -143,6 +150,7 @@ const styles = StyleSheet.create({
     maxWidth: 280,
   },
   form: { gap: spacing.xs },
+  forgot: { alignSelf: 'flex-end', fontFamily: fontFamily.bodyMedium, fontSize: fontSize.sm, marginTop: spacing.xs },
   submit: { marginTop: spacing.lg, borderRadius: radius.md },
   submitContent: { paddingVertical: spacing.xs },
   footer: {

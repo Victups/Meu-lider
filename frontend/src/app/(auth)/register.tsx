@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,6 +11,7 @@ import { Link, useRouter } from 'expo-router';
 import { Button, HelperText, Snackbar, TextInput } from 'react-native-paper';
 import { Screen } from '@/components/ui';
 import { toUserMessage } from '@/lib/errors';
+import { invitationsService } from '@/services';
 import { useAuthStore } from '@/stores/auth';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
@@ -23,13 +24,15 @@ export default function RegisterScreen() {
   const signUp = useAuthStore((s) => s.signUp);
 
   const emailRef = useRef<RNTextInput>(null);
-  const churchRef = useRef<RNTextInput>(null);
+  const codeRef = useRef<RNTextInput>(null);
   const passwordRef = useRef<RNTextInput>(null);
   const confirmRef = useRef<RNTextInput>(null);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [churchId, setChurchId] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [invite, setInvite] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -40,10 +43,29 @@ export default function RegisterScreen() {
   const canSubmit =
     name.trim() !== '' &&
     email.trim() !== '' &&
-    churchId.trim() !== '' &&
+    inviteCode.trim().length >= 4 &&
     password.length >= MIN_PASSWORD_LENGTH &&
     !mismatch &&
     !submitting;
+
+  // Confirms where the code leads before the person fills in a password.
+  useEffect(() => {
+    const code = inviteCode.trim();
+    setInvite(null);
+    setInviteError(false);
+    if (code.length < 4) return;
+
+    const timer = setTimeout(() => {
+      invitationsService
+        .preview(code)
+        .then((preview) =>
+          setInvite(preview.teamName ? `${preview.churchName} · equipe ${preview.teamName}` : preview.churchName),
+        )
+        .catch(() => setInviteError(true));
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [inviteCode]);
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -52,7 +74,7 @@ export default function RegisterScreen() {
       await signUp({
         name: name.trim(),
         email: email.trim().toLowerCase(),
-        churchId: churchId.trim(),
+        inviteCode: inviteCode.trim(),
         password,
       });
       router.replace('/');
@@ -69,7 +91,7 @@ export default function RegisterScreen() {
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.app.text }]}>Criar conta</Text>
           <Text style={[styles.subtitle, { color: theme.app.textMuted }]}>
-            Peça o código da sua igreja para a liderança
+            Peça o código de convite ao seu líder
           </Text>
         </View>
 
@@ -98,25 +120,25 @@ export default function RegisterScreen() {
             autoComplete="email"
             returnKeyType="next"
             blurOnSubmit={false}
-            onSubmitEditing={() => churchRef.current?.focus()}
+            onSubmitEditing={() => codeRef.current?.focus()}
             left={<TextInput.Icon icon="email-outline" />}
           />
 
           <TextInput
-            ref={churchRef}
+            ref={codeRef}
             mode="outlined"
-            label="Código da igreja"
-            value={churchId}
-            onChangeText={setChurchId}
-            autoCapitalize="none"
+            label="Código de convite"
+            value={inviteCode}
+            onChangeText={setInviteCode}
+            autoCapitalize="characters"
             autoCorrect={false}
             returnKeyType="next"
             blurOnSubmit={false}
             onSubmitEditing={() => passwordRef.current?.focus()}
-            left={<TextInput.Icon icon="church" />}
+            left={<TextInput.Icon icon="ticket-confirmation-outline" />}
           />
-          <HelperText type="info" visible>
-            Código no formato 0000aaaa-00aa-00aa-00aa-0000aaaa0000
+          <HelperText type={inviteError ? 'error' : 'info'} visible>
+            {inviteError ? 'Código inválido ou expirado' : invite ? `Você vai entrar em: ${invite}` : 'Ex.: K7M4QX'}
           </HelperText>
 
           <TextInput
