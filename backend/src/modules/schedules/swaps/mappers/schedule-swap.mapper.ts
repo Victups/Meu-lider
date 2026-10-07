@@ -1,5 +1,6 @@
+import { toOptionalMemberResponse } from '../../../members/mappers/member.mapper';
 import { ScheduleSwap } from '../../entities/schedule-swap.entity';
-import { toOptionalScheduleSummary } from '../../mappers/schedule.mapper';
+import { toScheduleResponse } from '../../mappers/schedule-detail.mapper';
 import { ScheduleSwapResponseDto } from '../dtos/schedule-swap-response.dto';
 
 export function toScheduleSwapResponse(swap: ScheduleSwap): ScheduleSwapResponseDto {
@@ -9,12 +10,15 @@ export function toScheduleSwapResponse(swap: ScheduleSwap): ScheduleSwapResponse
     requestedByMemberId: swap.requestedByMemberId,
     targetMemberId: swap.targetMemberId,
     acceptedByMemberId: swap.acceptedByMemberId,
+    counterScheduleId: swap.counterScheduleId ?? null,
     status: swap.status,
     reason: swap.reason,
     respondedAt: swap.respondedAt,
     createdAt: swap.createdAt,
     updatedAt: swap.updatedAt,
-    schedule: toOptionalScheduleSummary(swap.schedule),
+    schedule: swap.schedule ? toScheduleResponse(swap.schedule) : undefined,
+    counterSchedule: swap.counterSchedule ? toScheduleResponse(swap.counterSchedule) : undefined,
+    requestedByMember: toOptionalMemberResponse(swap.requestedByMember),
   };
 }
 
