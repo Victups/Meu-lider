@@ -45,6 +45,11 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="availability" options={{ href: null }} />
       <Tabs.Screen name="church-settings" options={{ href: null }} />
       <Tabs.Screen name="agenda" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="swaps" options={{ href: null }} />
+      <Tabs.Screen name="swap-request" options={{ href: null }} />
+      <Tabs.Screen name="invitations" options={{ href: null }} />
+      <Tabs.Screen name="reports" options={{ href: null }} />
     </Tabs>
   );
 }
