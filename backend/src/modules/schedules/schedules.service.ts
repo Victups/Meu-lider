@@ -150,10 +150,8 @@ export class SchedulesService implements ISchedulesService {
     schedule.status = ScheduleStatus.CANCELLED;
     const saved = await this.schedulesRepository.save(schedule);
 
-    // The leader decides that someone is out; picking the replacement is the
-    // engine's job. A failure here must not undo the release.
     try {
-      await this.autoScheduleService.refillEvent(saved.eventId);
+      await this.autoScheduleService.refillEvent(saved.eventId, saved.teamRoleId);
     } catch (error) {
       this.logger.warn(
         `Não foi possível repor a vaga do evento ${saved.eventId}: ${

@@ -17,4 +17,12 @@ export const notificationsService = {
   async markAllAsRead(): Promise<void> {
     await http.post('/notifications/read-all');
   },
+
+  async registerPushToken(token: string): Promise<void> {
+    await http.post('/notifications/register-token', { token });
+  },
+
+  async removePushToken(): Promise<void> {
+    await http.post('/notifications/remove-token');
+  },
 };

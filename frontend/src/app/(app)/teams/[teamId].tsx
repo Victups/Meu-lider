@@ -42,6 +42,7 @@ export default function TeamDetailScreen() {
   const [assignTo, setAssignTo] = useState<TeamMember | null>(null);
   const [removingMember, setRemovingMember] = useState<TeamMember | null>(null);
   const [saving, setSaving] = useState(false);
+  const [filterRoleIds, setFilterRoleIds] = useState<Set<string>>(new Set());
 
   const isLeaderOfThisTeam = useMemo(() => {
     if (!user) return false;
@@ -98,6 +99,23 @@ export default function TeamDetailScreen() {
       load();
     }, [load]),
   );
+
+  const toggleFilterRole = (roleId: string) => {
+    setFilterRoleIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(roleId)) next.delete(roleId);
+      else next.add(roleId);
+      return next;
+    });
+  };
+
+  const filteredMembers = useMemo(() => {
+    if (filterRoleIds.size === 0) return teamMembers;
+    return teamMembers.filter((entry) => {
+      const assigned = memberRoles[entry.memberId] ?? [];
+      return assigned.some((role) => filterRoleIds.has(role.id));
+    });
+  }, [teamMembers, memberRoles, filterRoleIds]);
 
   const candidates = useMemo(() => {
     const alreadyIn = new Set(teamMembers.map((entry) => entry.memberId));
@@ -224,7 +242,13 @@ export default function TeamDetailScreen() {
           ) : (
             <View style={styles.chips}>
               {roles.map((role) => (
-                <RoleChip key={role.id} label={role.name} count={role.defaultSlots} />
+                <RoleChip
+                  key={role.id}
+                  label={role.name}
+                  count={role.defaultSlots}
+                  selected={filterRoleIds.has(role.id)}
+                  onPress={() => toggleFilterRole(role.id)}
+                />
               ))}
             </View>
           )}
@@ -232,15 +256,19 @@ export default function TeamDetailScreen() {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.app.text }]}>
-            Integrantes{teamMembers.length > 0 ? ` · ${teamMembers.length}` : ''}
+            Integrantes{teamMembers.length > 0 ? ` · ${filterRoleIds.size > 0 ? `${filteredMembers.length}/${teamMembers.length}` : teamMembers.length}` : ''}
           </Text>
 
-          {teamMembers.length === 0 ? (
+          {filteredMembers.length === 0 && teamMembers.length === 0 ? (
             <Text style={[styles.hint, { color: theme.app.textSubtle }]}>
               Adicione quem faz parte desta equipe para poder escalá-los.
             </Text>
+          ) : filteredMembers.length === 0 ? (
+            <Text style={[styles.hint, { color: theme.app.textSubtle }]}>
+              Nenhum integrante com essa função.
+            </Text>
           ) : (
-            teamMembers.map((entry) => {
+            filteredMembers.map((entry) => {
               const assigned = memberRoles[entry.memberId] ?? [];
 
               return (

@@ -13,6 +13,7 @@ import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { darkTheme, lightTheme } from '@/theme';
 import { useAuthStore } from '@/stores/auth';
+import { useNotifications } from '@/hooks/use-notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -31,6 +32,8 @@ export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
   const { user, isLoading, restoreSession } = useAuthStore();
+
+  useNotifications();
 
   useEffect(() => {
     restoreSession();

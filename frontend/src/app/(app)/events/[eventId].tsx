@@ -49,6 +49,10 @@ export default function EventDetailScreen() {
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set());
   const [scheduling, setScheduling] = useState(false);
 
+  // Swap / manage a single schedule
+  const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
+  const [swapping, setSwapping] = useState(false);
+
   // Detect if user leads any of the event's teams
   const [leaderOfTeamIds, setLeaderOfTeamIds] = useState<Set<string>>(new Set());
 
@@ -211,6 +215,40 @@ export default function EventDetailScreen() {
     }
   };
 
+  const handleSwap = async () => {
+    if (!currentChurch || !selectedSchedule) return;
+    setSwapping(true);
+    try {
+      await schedulesService.releaseByLeader(
+        currentChurch.id,
+        selectedSchedule.id,
+        'Troca pelo líder',
+      );
+      setSelectedSchedule(null);
+      setToast('Troca realizada — o motor escalou outra pessoa');
+      await load();
+    } catch (err) {
+      setToast(toUserMessage(err));
+    } finally {
+      setSwapping(false);
+    }
+  };
+
+  const handleRemoveSchedule = async () => {
+    if (!currentChurch || !selectedSchedule) return;
+    setSwapping(true);
+    try {
+      await schedulesService.remove(currentChurch.id, selectedSchedule.id);
+      setSelectedSchedule(null);
+      setToast('Escala removida');
+      await load();
+    } catch (err) {
+      setToast(toUserMessage(err));
+    } finally {
+      setSwapping(false);
+    }
+  };
+
   const resetForm = () => {
     setFormOpen(false);
     setTeamId(null);
@@ -350,20 +388,24 @@ export default function EventDetailScreen() {
           />
         }
         renderItem={({ item }) => (
-          <Card accentColor={item.team?.color}>
-            <View style={styles.row}>
-              <Avatar name={item.member?.fullName ?? '?'} color={item.team?.color} />
-              <View style={styles.info}>
-                <Text style={[styles.memberName, { color: theme.app.text }]}>
-                  {item.member?.fullName ?? 'Membro'}
-                </Text>
-                <Text style={[styles.role, { color: theme.app.textMuted }]}>
-                  {item.team?.name ?? 'Equipe'} · {item.teamRole?.name ?? 'Função'}
-                </Text>
+          <Pressable
+            onPress={canManage && item.status !== 'CANCELLED' ? () => setSelectedSchedule(item) : undefined}
+          >
+            <Card accentColor={item.team?.color}>
+              <View style={styles.row}>
+                <Avatar name={item.member?.fullName ?? '?'} color={item.team?.color} />
+                <View style={styles.info}>
+                  <Text style={[styles.memberName, { color: theme.app.text }]}>
+                    {item.member?.fullName ?? 'Membro'}
+                  </Text>
+                  <Text style={[styles.role, { color: theme.app.textMuted }]}>
+                    {item.team?.name ?? 'Equipe'} · {item.teamRole?.name ?? 'Função'}
+                  </Text>
+                </View>
+                <StatusBadge status={item.status} />
               </View>
-              <StatusBadge status={item.status} />
-            </View>
-          </Card>
+            </Card>
+          </Pressable>
         )}
       />
 
@@ -509,6 +551,45 @@ export default function EventDetailScreen() {
         />
       </Sheet>
 
+      {/* Schedule action sheet */}
+      <Sheet
+        visible={selectedSchedule !== null}
+        onDismiss={() => setSelectedSchedule(null)}
+        title={selectedSchedule?.member?.fullName ?? 'Membro'}
+        subtitle={`${selectedSchedule?.team?.name ?? 'Equipe'} · ${selectedSchedule?.teamRole?.name ?? 'Função'}`}
+        footer={
+          <Button
+            mode="outlined"
+            onPress={() => setSelectedSchedule(null)}
+            style={styles.sheetAction}
+          >
+            Fechar
+          </Button>
+        }
+      >
+        <Button
+          mode="contained"
+          icon="swap-horizontal"
+          onPress={handleSwap}
+          loading={swapping}
+          disabled={swapping}
+          style={styles.actionBtn}
+        >
+          Trocar pessoa
+        </Button>
+        <Button
+          mode="outlined"
+          icon="account-remove"
+          onPress={handleRemoveSchedule}
+          loading={swapping}
+          disabled={swapping}
+          textColor={theme.colors.error}
+          style={styles.actionBtn}
+        >
+          Remover da escala
+        </Button>
+      </Sheet>
+
       <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
         {toast ?? ''}
       </Snackbar>
@@ -548,6 +629,7 @@ const styles = StyleSheet.create({
   role: { fontFamily: fontFamily.body, fontSize: fontSize.sm },
   roleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   sheetAction: { flex: 1, borderRadius: radius.md },
+  actionBtn: { borderRadius: radius.md },
   repeat: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -2,15 +2,15 @@ import type { ID, ISODateString } from './common';
 
 export const NotificationType = {
   SCHEDULE_ASSIGNED: 'SCHEDULE_ASSIGNED',
-  SCHEDULE_CONFIRMED: 'SCHEDULE_CONFIRMED',
+  SCHEDULE_CHANGED: 'SCHEDULE_CHANGED',
+  CONFIRMATION_REQUESTED: 'CONFIRMATION_REQUESTED',
   SCHEDULE_CANCELLED: 'SCHEDULE_CANCELLED',
   SCHEDULE_REMINDER: 'SCHEDULE_REMINDER',
-  GENERAL: 'GENERAL',
+  AVAILABILITY_REMINDER: 'AVAILABILITY_REMINDER',
 } as const;
 
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
-/** Notifications are append-only, so the API exposes no updatedAt. */
 export interface Notification {
   id: ID;
   userId: ID;

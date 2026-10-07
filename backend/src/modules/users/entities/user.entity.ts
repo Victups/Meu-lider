@@ -43,6 +43,9 @@ export class User {
   @Column({ type: 'boolean', default: true })
   active: boolean;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  expoPushToken: string;
+
   @Column({ type: 'timestamptz', nullable: true })
   lastLoginAt: Date;
 

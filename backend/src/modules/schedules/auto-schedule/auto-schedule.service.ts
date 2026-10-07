@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import {
@@ -30,6 +30,8 @@ import {
   isAvailableForWindows,
 } from '../../availability/utils';
 import { Event } from '../../events/entities/event.entity';
+import { NotificationType } from '../../notifications/entities/notification.entity';
+import { PushNotificationService, type PushPayload } from '../../notifications/push-notification.service';
 import { TeamAccessService } from '../../teams/team-access.service';
 import { TeamMember } from '../../teams/entities/team-member.entity';
 import { TeamRole } from '../../teams/entities/team-role.entity';
@@ -108,7 +110,10 @@ export class AutoScheduleService implements IAutoScheduleService {
     @InjectRepository(Availability)
     private readonly availabilityRepository: Repository<Availability>,
     private readonly teamAccessService: TeamAccessService,
+    private readonly pushService: PushNotificationService,
   ) {}
+
+  private readonly logger = new Logger(AutoScheduleService.name);
 
   async generateForEvent(
     churchId: string,
@@ -223,6 +228,12 @@ export class AutoScheduleService implements IAutoScheduleService {
       }
     }
 
+    if (!options.dryRun && assignments.length > 0) {
+      this.sendAssignmentNotifications(event, assignments, candidatePool.teamMembersByTeam).catch(
+        (err) => this.logger.warn(`Falha ao notificar escalados: ${err}`),
+      );
+    }
+
     return {
       eventId: event.id,
       eventName: event.name,
@@ -243,11 +254,11 @@ export class AutoScheduleService implements IAutoScheduleService {
    * trigger is a member declining, not a leader acting. Cancelled rows keep
    * blocking the member who declined, so the replacement is always someone new.
    */
-  async refillEvent(eventId: string): Promise<AutoScheduleResultDto | null> {
+  async refillEvent(eventId: string, roleId?: string): Promise<AutoScheduleResultDto | null> {
     const event = await this.findEventEntity(eventId).catch(() => null);
     if (!event) return null;
 
-    return this.staffEvent(event, {});
+    return this.staffEvent(event, roleId ? { roleIds: [roleId] } : {});
   }
 
   async generateForEvents(
@@ -525,6 +536,45 @@ export class AutoScheduleService implements IAutoScheduleService {
    * nobody plays bass at all, the bassist is away, or the bassist is already on
    * keys for this same event. Collapsing them into one message hides the fix.
    */
+  private async sendAssignmentNotifications(
+    event: Event,
+    assignments: AutoScheduleAssignmentDto[],
+    teamMembersByTeam: Map<string, TeamMember[]>,
+  ): Promise<void> {
+    const allTeamMembers = [...teamMembersByTeam.values()].flat();
+    const memberIdToUserId = new Map<string, string>();
+    for (const tm of allTeamMembers) {
+      if (tm.member?.userId) {
+        memberIdToUserId.set(tm.memberId, tm.member.userId);
+      }
+    }
+
+    const dateStr = new Date(event.eventDate).toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const payloads: PushPayload[] = [];
+    for (const assignment of assignments) {
+      const userId = memberIdToUserId.get(assignment.memberId);
+      if (!userId) continue;
+
+      payloads.push({
+        userId,
+        title: 'Você foi escalado(a)!',
+        message: `Você foi escalado(a) como ${assignment.teamRoleName} no evento "${event.name}" em ${dateStr}.`,
+        type: NotificationType.SCHEDULE_ASSIGNED,
+        relatedScheduleId: assignment.scheduleId ?? undefined,
+        data: { screen: 'event', eventId: event.id },
+      });
+    }
+
+    await this.pushService.sendMany(payloads);
+  }
+
   private resolveGapReason(
     membersCoveringRole: number,
     availableCandidates: number,

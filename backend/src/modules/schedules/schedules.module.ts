@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Availability } from '../availability/entities/availability.entity';
 import { WeekdayAvailability } from '../availability/entities/weekday-availability.entity';
 import { Member } from '../members/entities/member.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { TeamMember } from '../teams/entities/team-member.entity';
 import { TeamRole } from '../teams/entities/team-role.entity';
 import { Event } from '../events/entities/event.entity';
@@ -19,6 +20,7 @@ import { ScheduleSwapsService } from './swaps/schedule-swaps.service';
 @Module({
   imports: [
     TeamsModule,
+    NotificationsModule,
     TypeOrmModule.forFeature([
       Schedule,
       ScheduleSwap,

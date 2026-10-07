@@ -24,6 +24,12 @@
       "expo-font",
       "expo-secure-store",
       [
+        "expo-notifications",
+        {
+          "sounds": []
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#FAF9F7",
