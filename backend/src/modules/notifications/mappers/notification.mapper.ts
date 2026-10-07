@@ -11,6 +11,8 @@ export function toNotificationResponse(notification: Notification): Notification
     message: notification.message,
     type: notification.type,
     relatedScheduleId: notification.relatedScheduleId ?? null,
+    relatedEventId: notification.relatedEventId ?? null,
+    relatedSwapId: notification.relatedSwapId ?? null,
     isRead: notification.isRead,
     readAt: notification.readAt ?? null,
     createdAt: notification.createdAt,

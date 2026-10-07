@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResourceType } from '../../common/constants';
 import { ResourceNotFoundException } from '../../common/exceptions';
-import { CreateNotificationDto } from './dtos/create-notification.dto';
 import { NotificationResponseDto } from './dtos/notification-response.dto';
 import { Notification } from './entities/notification.entity';
 import type { INotificationsService } from './interfaces/notifications-service.interface';
@@ -12,6 +11,8 @@ import {
   toNotificationResponseList,
 } from './mappers/notification.mapper';
 
+const INBOX_LIMIT = 100;
+
 @Injectable()
 export class NotificationsService implements INotificationsService {
   constructor(
@@ -19,35 +20,34 @@ export class NotificationsService implements INotificationsService {
     private readonly notificationsRepository: Repository<Notification>,
   ) {}
 
-  async create(createNotificationDto: CreateNotificationDto): Promise<NotificationResponseDto> {
-    const notification = this.notificationsRepository.create(createNotificationDto);
-    return toNotificationResponse(await this.notificationsRepository.save(notification));
-  }
-
-  async findOne(id: string): Promise<NotificationResponseDto> {
-    return toNotificationResponse(await this.findNotificationEntity(id));
+  async findOne(id: string, userId: string): Promise<NotificationResponseDto> {
+    return toNotificationResponse(await this.findOwned(id, userId));
   }
 
   async findByUser(userId: string, unreadOnly = false): Promise<NotificationResponseDto[]> {
-    let query = this.notificationsRepository
-      .createQueryBuilder('notification')
-      .where('notification.userId = :userId', { userId });
+    const notifications = await this.notificationsRepository.find({
+      where: unreadOnly ? { userId, isRead: false } : { userId },
+      order: { createdAt: 'DESC' },
+      take: INBOX_LIMIT,
+    });
 
-    if (unreadOnly) {
-      query = query.andWhere('notification.isRead = :isRead', { isRead: false });
-    }
-
-    const notifications = await query.orderBy('notification.createdAt', 'DESC').getMany();
     return toNotificationResponseList(notifications);
   }
 
-  async markAsRead(id: string): Promise<NotificationResponseDto> {
-    const notification = await this.findNotificationEntity(id);
+  countUnread(userId: string): Promise<number> {
+    return this.notificationsRepository.count({ where: { userId, isRead: false } });
+  }
 
-    notification.isRead = true;
-    notification.readAt = new Date();
+  async markAsRead(id: string, userId: string): Promise<NotificationResponseDto> {
+    const notification = await this.findOwned(id, userId);
 
-    return toNotificationResponse(await this.notificationsRepository.save(notification));
+    if (!notification.isRead) {
+      notification.isRead = true;
+      notification.readAt = new Date();
+      await this.notificationsRepository.save(notification);
+    }
+
+    return toNotificationResponse(notification);
   }
 
   async markAllAsRead(userId: string): Promise<void> {
@@ -57,15 +57,14 @@ export class NotificationsService implements INotificationsService {
     );
   }
 
-  async remove(id: string): Promise<void> {
-    await this.notificationsRepository.delete(id);
+  async remove(id: string, userId: string): Promise<void> {
+    const notification = await this.findOwned(id, userId);
+    await this.notificationsRepository.delete(notification.id);
   }
 
-  private async findNotificationEntity(id: string): Promise<Notification> {
-    const notification = await this.notificationsRepository.findOne({
-      where: { id },
-      relations: { user: true, relatedSchedule: true },
-    });
+  /** A notification that belongs to someone else is reported as not found. */
+  private async findOwned(id: string, userId: string): Promise<Notification> {
+    const notification = await this.notificationsRepository.findOne({ where: { id, userId } });
 
     if (!notification) {
       throw new ResourceNotFoundException(ResourceType.NOTIFICATION, id);

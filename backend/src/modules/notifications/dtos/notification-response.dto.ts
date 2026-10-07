@@ -9,6 +9,8 @@ export class NotificationResponseDto {
   message: string;
   type: NotificationType;
   relatedScheduleId: string | null;
+  relatedEventId: string | null;
+  relatedSwapId: string | null;
   isRead: boolean;
   readAt: Date | null;
   createdAt: Date;

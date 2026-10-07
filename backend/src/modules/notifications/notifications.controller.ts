@@ -13,6 +13,7 @@ import {
 import { JwtAuthGuard } from '../../common/guards';
 import type { AuthenticatedRequest, MessageResponse } from '../../common/interfaces';
 import { NotificationResponseDto } from './dtos/notification-response.dto';
+import { RegisterPushTokenDto } from './dtos/register-token.dto';
 import { NotificationsService } from './notifications.service';
 import { PushNotificationService } from './push-notification.service';
 
@@ -24,21 +25,6 @@ export class NotificationsController {
     private readonly pushService: PushNotificationService,
   ) {}
 
-  @Post('register-token')
-  async registerToken(
-    @Request() req: AuthenticatedRequest,
-    @Body('token') token: string,
-  ): Promise<MessageResponse> {
-    await this.pushService.registerToken(req.user.id, token);
-    return { message: 'Token registrado' };
-  }
-
-  @Post('remove-token')
-  async removeToken(@Request() req: AuthenticatedRequest): Promise<MessageResponse> {
-    await this.pushService.removeToken(req.user.id);
-    return { message: 'Token removido' };
-  }
-
   @Get()
   findByUser(
     @Request() req: AuthenticatedRequest,
@@ -47,14 +33,24 @@ export class NotificationsController {
     return this.notificationsService.findByUser(req.user.id, unread === 'true');
   }
 
-  @Get(':notificationId')
-  findOne(@Param('notificationId') id: string): Promise<NotificationResponseDto> {
-    return this.notificationsService.findOne(id);
+  @Get('unread-count')
+  async unreadCount(@Request() req: AuthenticatedRequest): Promise<{ count: number }> {
+    return { count: await this.notificationsService.countUnread(req.user.id) };
   }
 
-  @Put(':notificationId/read')
-  markAsRead(@Param('notificationId') id: string): Promise<NotificationResponseDto> {
-    return this.notificationsService.markAsRead(id);
+  @Post('register-token')
+  async registerToken(
+    @Request() req: AuthenticatedRequest,
+    @Body() body: RegisterPushTokenDto,
+  ): Promise<MessageResponse> {
+    const registered = await this.pushService.registerToken(req.user.id, body.token);
+    return { message: registered ? 'Token registrado' : 'Token ignorado: formato inválido' };
+  }
+
+  @Post('remove-token')
+  async removeToken(@Request() req: AuthenticatedRequest): Promise<MessageResponse> {
+    await this.pushService.removeToken(req.user.id);
+    return { message: 'Token removido' };
   }
 
   @Post('read-all')
@@ -63,9 +59,28 @@ export class NotificationsController {
     return { message: 'Todas as notificações foram marcadas como lidas' };
   }
 
+  @Get(':notificationId')
+  findOne(
+    @Param('notificationId') id: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<NotificationResponseDto> {
+    return this.notificationsService.findOne(id, req.user.id);
+  }
+
+  @Put(':notificationId/read')
+  markAsRead(
+    @Param('notificationId') id: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<NotificationResponseDto> {
+    return this.notificationsService.markAsRead(id, req.user.id);
+  }
+
   @Delete(':notificationId')
-  async remove(@Param('notificationId') id: string): Promise<MessageResponse> {
-    await this.notificationsService.remove(id);
+  async remove(
+    @Param('notificationId') id: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<MessageResponse> {
+    await this.notificationsService.remove(id, req.user.id);
     return { message: 'Notificação removida' };
   }
 }
