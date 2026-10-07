@@ -21,14 +21,13 @@ import type { JwtUser } from '../../../common/interfaces';
 import {
   addDays,
   differenceInCalendarDays,
+  formatEventWhen,
+  formatShortDate,
   toDateOnlyString,
 } from '../../../common/utils';
 import { Availability } from '../../availability/entities/availability.entity';
 import { WeekdayAvailability } from '../../availability/entities/weekday-availability.entity';
-import {
-  findAvailabilityWindowsForDay,
-  isAvailableForWindows,
-} from '../../availability/utils';
+import { findUnavailableMemberIdsForDay } from '../../availability/utils';
 import { Event } from '../../events/entities/event.entity';
 import { NotificationType } from '../../notifications/entities/notification.entity';
 import { PushNotificationService, type PushPayload } from '../../notifications/push-notification.service';
@@ -36,6 +35,7 @@ import { TeamAccessService } from '../../teams/team-access.service';
 import { TeamMember } from '../../teams/entities/team-member.entity';
 import { TeamRole } from '../../teams/entities/team-role.entity';
 import { Schedule, ScheduleStatus } from '../entities/schedule.entity';
+import { findMemberIdsBusyDuring } from '../utils/overlap.util';
 import {
   AutoScheduleAssignmentDto,
   AutoScheduleResultDto,
@@ -54,6 +54,20 @@ interface ServedRow {
   eventDate: Date;
 }
 
+interface CandidatePool {
+  teamMembersByTeam: Map<string, TeamMember[]>;
+  unavailableMemberIds: Set<string>;
+  historyByMember: Map<string, MemberServingHistory>;
+}
+
+/** An assignment waiting to be announced, so a batch can be told once per person. */
+interface PendingNotice {
+  event: Event;
+  userId: string;
+  teamRoleName: string;
+  scheduleId: string | null;
+}
+
 /**
  * Builds the schedule of an event on its own, because nobody reviews it before
  * it is published: the leader registers the event and the roster has to come
@@ -65,7 +79,14 @@ interface ServedRow {
  *   3. covers the position through TeamMemberRole;
  *   4. is available on the event date (see `isMemberAvailable`);
  *   5. has no row at all for this event — including CANCELLED ones, because the
- *      unique (eventId, teamId, memberId) index would reject the insert anyway.
+ *      unique (eventId, teamId, memberId) index would reject the insert anyway;
+ *   6. is not serving another event that overlaps this one in time.
+ *
+ * MEMBERS IN MORE THAN ONE TEAM. Rule 5 looks at the whole event, not at one
+ * team, so someone who leads one team and plays in another is booked once per
+ * event. Positions are filled scarcest-first (see `orderByScarcity`) so that
+ * shared person lands where nobody else can cover. A leader generating a roster
+ * only ever staffs the teams they lead (see `scopeToUserTeams`).
  *
  * FAIRNESS SCORE (higher wins; every term is normalised to 0..1 before weighting)
  *
@@ -121,21 +142,40 @@ export class AutoScheduleService implements IAutoScheduleService {
     options: GenerateScheduleDto,
     user: JwtUser,
   ): Promise<AutoScheduleResultDto> {
+    const notices: PendingNotice[] = [];
+    const result = await this.generateOne(churchId, eventId, options, user, notices);
+    await this.announceAssignments(notices);
+
+    return result;
+  }
+
+  private async generateOne(
+    churchId: string,
+    eventId: string,
+    options: GenerateScheduleDto,
+    user: JwtUser,
+    notices: PendingNotice[],
+  ): Promise<AutoScheduleResultDto> {
     const event = await this.findEventEntity(eventId);
 
     if (event.churchId !== churchId) {
       throw new ChurchAccessDeniedException(churchId);
     }
 
-    await this.assertCanScheduleEvent(event, user);
+    const scoped = await this.scopeToUserTeams(event, options, user);
 
-    return this.staffEvent(event, options);
+    return this.staffEvent(event, scoped, notices);
   }
 
-  /** The engine itself, with no authorisation: callers decide who may reach it. */
+  /**
+   * The engine itself, with no authorisation: callers decide who may reach it.
+   * Assignments are appended to `notices` instead of being announced here, so a
+   * caller staffing a whole month can tell each person once.
+   */
   private async staffEvent(
     event: Event,
     options: GenerateScheduleDto,
+    notices: PendingNotice[],
   ): Promise<AutoScheduleResultDto> {
     const { churchId, id: eventId } = event;
 
@@ -156,12 +196,15 @@ export class AutoScheduleService implements IAutoScheduleService {
     const gaps: ScheduleGapDto[] = [];
 
     // Any row blocks a new insert on the unique index, cancelled or not; only
-    // live rows count towards the slots that are actually covered.
+    // live rows count towards the slots that are actually covered. Existing rows
+    // span every team of the event, so a member who sits in two teams is never
+    // booked twice into the same event.
     const bookedMemberIds = new Set(existingSchedules.map((schedule) => schedule.memberId));
     const filledByPosition = this.countFilledSlots(existingSchedules);
     let alreadyFilledCount = 0;
 
     const candidatePool = await this.loadCandidatePool(teamRoles, event);
+    teamRoles = this.orderByScarcity(teamRoles, candidatePool, bookedMemberIds, filledByPosition);
 
     for (const teamRole of teamRoles) {
       const filledSlots = filledByPosition.get(teamRole.id) ?? 0;
@@ -209,6 +252,16 @@ export class AutoScheduleService implements IAutoScheduleService {
       created.forEach((schedule, index) => {
         bookedMemberIds.add(schedule.memberId);
         assignments.push(toAutoScheduleAssignment(schedule, teamRole, chosen[index].score));
+
+        const userId = chosen[index].teamMember.member?.userId;
+        if (userId && !options.dryRun) {
+          notices.push({
+            event,
+            userId,
+            teamRoleName: teamRole.name,
+            scheduleId: schedule.id ?? null,
+          });
+        }
       });
 
       const totalFilled = filledSlots + created.length;
@@ -228,12 +281,6 @@ export class AutoScheduleService implements IAutoScheduleService {
       }
     }
 
-    if (!options.dryRun && assignments.length > 0) {
-      this.sendAssignmentNotifications(event, assignments, candidatePool.teamMembersByTeam).catch(
-        (err) => this.logger.warn(`Falha ao notificar escalados: ${err}`),
-      );
-    }
-
     return {
       eventId: event.id,
       eventName: event.name,
@@ -248,7 +295,6 @@ export class AutoScheduleService implements IAutoScheduleService {
     };
   }
 
-  /** Sequential on purpose: each event has to see the assignments of the previous one. */
   /**
    * Re-runs the engine after someone drops out, with no permission check: the
    * trigger is a member declining, not a leader acting. Cancelled rows keep
@@ -258,9 +304,17 @@ export class AutoScheduleService implements IAutoScheduleService {
     const event = await this.findEventEntity(eventId).catch(() => null);
     if (!event) return null;
 
-    return this.staffEvent(event, roleId ? { roleIds: [roleId] } : {});
+    const notices: PendingNotice[] = [];
+    const result = await this.staffEvent(event, roleId ? { roleIds: [roleId] } : {}, notices);
+    await this.announceAssignments(notices);
+
+    return result;
   }
 
+  /**
+   * Sequential on purpose: each event has to see the assignments of the previous
+   * one. Everyone is notified once at the end, however many events they landed in.
+   */
   async generateForEvents(
     churchId: string,
     eventIds: string[],
@@ -268,25 +322,135 @@ export class AutoScheduleService implements IAutoScheduleService {
     user: JwtUser,
   ): Promise<AutoScheduleResultDto[]> {
     const results: AutoScheduleResultDto[] = [];
+    const notices: PendingNotice[] = [];
 
     for (const eventId of eventIds) {
-      results.push(await this.generateForEvent(churchId, eventId, options, user));
+      results.push(await this.generateOne(churchId, eventId, options, user, notices));
     }
+
+    await this.announceAssignments(notices);
 
     return results;
   }
 
-  private async assertCanScheduleEvent(event: Event, user: JwtUser): Promise<void> {
-    if (CHURCH_MANAGER_ROLES.includes(user.role)) return;
+  /**
+   * A church admin may staff any team of the event. A leader is held to the
+   * teams they lead: generating from the event screen must never rewrite
+   * another team's roster, even when both teams are linked to the same event.
+   */
+  private async scopeToUserTeams(
+    event: Event,
+    options: GenerateScheduleDto,
+    user: JwtUser,
+  ): Promise<GenerateScheduleDto> {
+    if (CHURCH_MANAGER_ROLES.includes(user.role)) return options;
 
-    const eventTeamIds = (event.teams ?? []).map((link) => link.teamId);
-    for (const teamId of eventTeamIds) {
-      if (await this.teamAccessService.canManageTeam(teamId, user)) return;
+    const requested = options.teamIds?.length
+      ? options.teamIds
+      : (event.teams ?? []).map((link) => link.teamId);
+
+    const allowed: string[] = [];
+    for (const teamId of requested) {
+      if (await this.teamAccessService.canManageTeam(teamId, user)) allowed.push(teamId);
     }
 
-    throw new InsufficientPermissionException(
-      'Apenas líderes das equipes do evento ou administradores podem gerar escalas',
-    );
+    if (allowed.length === 0) {
+      throw new InsufficientPermissionException(
+        'Apenas líderes das equipes do evento ou administradores podem gerar escalas',
+      );
+    }
+
+    return { ...options, teamIds: allowed };
+  }
+
+  /** One push per person: a single assignment is spelled out, several are summarised. */
+  private async announceAssignments(notices: PendingNotice[]): Promise<void> {
+    if (notices.length === 0) return;
+
+    const byUser = new Map<string, PendingNotice[]>();
+    for (const notice of notices) {
+      byUser.set(notice.userId, [...(byUser.get(notice.userId) ?? []), notice]);
+    }
+
+    const payloads: PushPayload[] = [];
+    for (const [userId, own] of byUser) {
+      const sorted = [...own].sort(
+        (a, b) => a.event.eventDate.getTime() - b.event.eventDate.getTime(),
+      );
+      const first = sorted[0];
+
+      if (sorted.length === 1) {
+        payloads.push({
+          userId,
+          title: 'Você foi escalado(a)!',
+          message: `${first.teamRoleName} — ${first.event.name}, ${formatEventWhen(first.event.eventDate)}.`,
+          type: NotificationType.SCHEDULE_ASSIGNED,
+          relatedScheduleId: first.scheduleId ?? undefined,
+          relatedEventId: first.event.id,
+        });
+        continue;
+      }
+
+      const preview = sorted
+        .slice(0, 3)
+        .map((notice) => `${notice.event.name} (${formatShortDate(notice.event.eventDate)})`)
+        .join(', ');
+      const rest = sorted.length - 3;
+
+      payloads.push({
+        userId,
+        title: `Você foi escalado(a) em ${sorted.length} eventos`,
+        message: `${preview}${rest > 0 ? ` e mais ${rest}` : ''}. Veja em Minhas escalas.`,
+        type: NotificationType.SCHEDULE_ASSIGNED,
+        relatedScheduleId: first.scheduleId ?? undefined,
+        relatedEventId: first.event.id,
+      });
+    }
+
+    try {
+      await this.pushService.sendMany(payloads);
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao notificar escalados: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Fills the hardest positions first. A person who covers two positions should
+   * go to the one nobody else can take, not to whichever sorts first by name —
+   * otherwise a shared member can starve a team while another has spare hands.
+   * Slack (eligible people minus open slots) is the measure; the names only
+   * break ties so two runs on the same data agree.
+   */
+  private orderByScarcity(
+    teamRoles: TeamRole[],
+    pool: CandidatePool,
+    bookedMemberIds: Set<string>,
+    filledByPosition: Map<string, number>,
+  ): TeamRole[] {
+    const slackOf = (teamRole: TeamRole): number => {
+      const eligible = (pool.teamMembersByTeam.get(teamRole.teamId) ?? []).filter(
+        (teamMember) =>
+          this.coversRole(teamMember, teamRole.id) &&
+          !bookedMemberIds.has(teamMember.memberId) &&
+          !pool.unavailableMemberIds.has(teamMember.memberId),
+      ).length;
+      const missing = teamRole.defaultSlots - (filledByPosition.get(teamRole.id) ?? 0);
+
+      return eligible - Math.max(missing, 0);
+    };
+
+    return teamRoles
+      .map((teamRole) => ({ teamRole, slack: slackOf(teamRole) }))
+      .sort(
+        (a, b) =>
+          a.slack - b.slack ||
+          (a.teamRole.team?.name ?? '').localeCompare(b.teamRole.team?.name ?? '') ||
+          a.teamRole.name.localeCompare(b.teamRole.name) ||
+          a.teamRole.id.localeCompare(b.teamRole.id),
+      )
+      .map((entry) => entry.teamRole);
   }
 
   private async findEventEntity(id: string): Promise<Event> {
@@ -344,14 +508,7 @@ export class AutoScheduleService implements IAutoScheduleService {
     return filled;
   }
 
-  private async loadCandidatePool(
-    teamRoles: TeamRole[],
-    event: Event,
-  ): Promise<{
-    teamMembersByTeam: Map<string, TeamMember[]>;
-    unavailableMemberIds: Set<string>;
-    historyByMember: Map<string, MemberServingHistory>;
-  }> {
+  private async loadCandidatePool(teamRoles: TeamRole[], event: Event): Promise<CandidatePool> {
     const teamIds = [...new Set(teamRoles.map((teamRole) => teamRole.teamId))];
 
     if (teamIds.length === 0) {
@@ -379,9 +536,26 @@ export class AutoScheduleService implements IAutoScheduleService {
       teamMembersByTeam.set(teamMember.teamId, bucket);
     }
 
+    // Blocked by a dated absence or a standing weekday rule (see
+    // `availability-window.util` for what `isAvailable` means), or serving at
+    // another event that overlaps this one.
+    const unavailableMemberIds = await findUnavailableMemberIdsForDay(
+      this.availabilityRepository,
+      this.weekdayRepository,
+      memberIds,
+      eventDay,
+    );
+    for (const memberId of await findMemberIdsBusyDuring(
+      this.schedulesRepository,
+      memberIds,
+      event,
+    )) {
+      unavailableMemberIds.add(memberId);
+    }
+
     return {
       teamMembersByTeam,
-      unavailableMemberIds: await this.findUnavailableMemberIds(memberIds, eventDay),
+      unavailableMemberIds,
       historyByMember: await this.loadServingHistory(memberIds, event.eventDate),
     };
   }
@@ -396,62 +570,6 @@ export class AutoScheduleService implements IAutoScheduleService {
 
   private coversRole(teamMember: TeamMember, teamRoleId: string): boolean {
     return (teamMember.roles ?? []).some((assignment) => assignment.teamRoleId === teamRoleId);
-  }
-
-  /** See `availability-window.util` for what `isAvailable` means here. */
-  private async findUnavailableMemberIds(
-    memberIds: string[],
-    eventDay: string,
-  ): Promise<Set<string>> {
-    const unavailable = new Set<string>();
-
-    if (memberIds.length === 0) {
-      return unavailable;
-    }
-
-    const windows = await findAvailabilityWindowsForDay(
-      this.availabilityRepository,
-      memberIds,
-      eventDay,
-    );
-
-    const windowsByMember = new Map<string, Availability[]>();
-    for (const window of windows) {
-      const bucket = windowsByMember.get(window.memberId) ?? [];
-      bucket.push(window);
-      windowsByMember.set(window.memberId, bucket);
-    }
-
-    for (const [memberId, memberWindows] of windowsByMember) {
-      if (!isAvailableForWindows(memberWindows)) {
-        unavailable.add(memberId);
-      }
-    }
-
-    for (const memberId of await this.findWeekdayBlockedMemberIds(memberIds, eventDay)) {
-      unavailable.add(memberId);
-    }
-
-    return unavailable;
-  }
-
-  /**
-   * Standing weekly rule — "I only serve on weekends". Only rows explicitly set
-   * to unavailable count, so a member who never set a preference stays eligible.
-   */
-  private async findWeekdayBlockedMemberIds(
-    memberIds: string[],
-    eventDay: string,
-  ): Promise<string[]> {
-    // eventDay is YYYY-MM-DD; the T12:00 avoids the day shifting by timezone.
-    const weekday = new Date(`${eventDay}T12:00:00`).getDay();
-
-    const blocked = await this.weekdayRepository.find({
-      where: { memberId: In(memberIds), weekday, isAvailable: false },
-      select: { memberId: true },
-    });
-
-    return blocked.map((entry) => entry.memberId);
   }
 
   private async loadServingHistory(
@@ -536,45 +654,6 @@ export class AutoScheduleService implements IAutoScheduleService {
    * nobody plays bass at all, the bassist is away, or the bassist is already on
    * keys for this same event. Collapsing them into one message hides the fix.
    */
-  private async sendAssignmentNotifications(
-    event: Event,
-    assignments: AutoScheduleAssignmentDto[],
-    teamMembersByTeam: Map<string, TeamMember[]>,
-  ): Promise<void> {
-    const allTeamMembers = [...teamMembersByTeam.values()].flat();
-    const memberIdToUserId = new Map<string, string>();
-    for (const tm of allTeamMembers) {
-      if (tm.member?.userId) {
-        memberIdToUserId.set(tm.memberId, tm.member.userId);
-      }
-    }
-
-    const dateStr = new Date(event.eventDate).toLocaleDateString('pt-BR', {
-      weekday: 'long',
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-
-    const payloads: PushPayload[] = [];
-    for (const assignment of assignments) {
-      const userId = memberIdToUserId.get(assignment.memberId);
-      if (!userId) continue;
-
-      payloads.push({
-        userId,
-        title: 'Você foi escalado(a)!',
-        message: `Você foi escalado(a) como ${assignment.teamRoleName} no evento "${event.name}" em ${dateStr}.`,
-        type: NotificationType.SCHEDULE_ASSIGNED,
-        relatedScheduleId: assignment.scheduleId ?? undefined,
-        data: { screen: 'event', eventId: event.id },
-      });
-    }
-
-    await this.pushService.sendMany(payloads);
-  }
-
   private resolveGapReason(
     membersCoveringRole: number,
     availableCandidates: number,
