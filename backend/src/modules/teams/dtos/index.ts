@@ -2,6 +2,7 @@ export * from './add-team-member.dto';
 export * from './assign-team-role.dto';
 export * from './create-team-role.dto';
 export * from './create-team.dto';
+export * from './set-team-leader.dto';
 export * from './team-member-response.dto';
 export * from './team-member-role-response.dto';
 export * from './team-response.dto';

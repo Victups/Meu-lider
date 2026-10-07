@@ -9,13 +9,14 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { MANAGER_ROLES } from '../../common/constants';
+import { CHURCH_MANAGER_ROLES, MANAGER_ROLES } from '../../common/constants';
 import { Roles } from '../../common/decorators';
 import { ChurchGuard, JwtAuthGuard, RolesGuard } from '../../common/guards';
 import type { AuthenticatedRequest, MessageResponse } from '../../common/interfaces';
 import { AddTeamMemberDto } from './dtos/add-team-member.dto';
 import { AssignTeamRoleDto } from './dtos/assign-team-role.dto';
 import { CreateTeamDto } from './dtos/create-team.dto';
+import { SetTeamLeaderDto } from './dtos/set-team-leader.dto';
 import { TeamMemberResponseDto } from './dtos/team-member-response.dto';
 import { TeamMemberRoleResponseDto } from './dtos/team-member-role-response.dto';
 import { TeamResponseDto } from './dtos/team-response.dto';
@@ -39,8 +40,16 @@ export class TeamsController {
     return this.teamsService.findByChurch(churchId);
   }
 
-  @Roles(...MANAGER_ROLES)
+  /** Teams the logged-in user leads (every team, for church admins). */
+  @Get('led')
+  findLed(
+    @Param('churchId') churchId: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<TeamResponseDto[]> {
+    return this.teamsService.findLedBy(churchId, req.user);
+  }
 
+  @Roles(...MANAGER_ROLES)
   @Post()
   create(
     @Param('churchId') churchId: string,
@@ -91,6 +100,17 @@ export class TeamsController {
   ): Promise<TeamMemberResponseDto> {
     await this.teamAccessService.assertCanManageTeam(teamId, req.user);
     return this.teamsService.addMember(teamId, memberId, body.role);
+  }
+
+  /** Only church admins appoint leaders; a member may lead several teams. */
+  @Roles(...CHURCH_MANAGER_ROLES)
+  @Put(':teamId/members/:memberId/leader')
+  setLeader(
+    @Param('teamId') teamId: string,
+    @Param('memberId') memberId: string,
+    @Body() body: SetTeamLeaderDto,
+  ): Promise<TeamMemberResponseDto> {
+    return this.teamsService.setLeader(teamId, memberId, body.isLeader);
   }
 
   @Delete(':teamId/members/:memberId')

@@ -13,4 +13,12 @@ export interface ITeamsService {
   getTeamMembers(teamId: string): Promise<TeamMemberResponseDto[]>;
   addMember(teamId: string, memberId: string, role?: string): Promise<TeamMemberResponseDto>;
   removeMember(teamId: string, memberId: string): Promise<void>;
+  /**
+   * Appoints or removes a team leader. A person may lead several teams and be a
+   * plain member of others; their account role follows: LEADER while they lead
+   * at least one team, back to MEMBER when they lead none.
+   */
+  setLeader(teamId: string, memberId: string, isLeader: boolean): Promise<TeamMemberResponseDto>;
+  /** Teams the user leads; church admins get every team. */
+  findLedBy(churchId: string, user: JwtUser): Promise<TeamResponseDto[]>;
 }
