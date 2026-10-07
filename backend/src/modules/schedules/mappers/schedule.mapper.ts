@@ -13,6 +13,8 @@ export function toScheduleSummary(schedule: Schedule): ScheduleResponseDto {
     memberId: schedule.memberId,
     teamRoleId: schedule.teamRoleId,
     status: schedule.status,
+    releaseReason: schedule.releaseReason ?? null,
+    releaseRequestedAt: schedule.releaseRequestedAt ?? null,
     confirmedAt: schedule.confirmedAt,
     confirmedById: schedule.confirmedById,
     notes: schedule.notes,

@@ -18,6 +18,13 @@ export interface ISchedulesService {
     reason: string | undefined,
     user: JwtUser,
   ): Promise<ScheduleResponseDto>;
+  /**
+   * Everyone scheduled counts as present once the event has happened. A leader
+   * only steps in to record the exception.
+   */
+  markNoShow(id: string, user: JwtUser): Promise<ScheduleResponseDto>;
+  /** Undoes a no-show recorded by mistake. */
+  markAttended(id: string, user: JwtUser): Promise<ScheduleResponseDto>;
   update(
     id: string,
     updateData: UpdateScheduleDto,

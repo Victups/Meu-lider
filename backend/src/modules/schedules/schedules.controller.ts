@@ -103,6 +103,25 @@ export class SchedulesController {
     return this.schedulesService.releaseByLeader(id, body.reason, req.user);
   }
 
+  /** Leader records that someone scheduled did not show up. Everyone else counts as present. */
+  @Roles(...MANAGER_ROLES)
+  @Post(':scheduleId/no-show')
+  markNoShow(
+    @Param('scheduleId') id: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ScheduleResponseDto> {
+    return this.schedulesService.markNoShow(id, req.user);
+  }
+
+  @Roles(...MANAGER_ROLES)
+  @Post(':scheduleId/attended')
+  markAttended(
+    @Param('scheduleId') id: string,
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ScheduleResponseDto> {
+    return this.schedulesService.markAttended(id, req.user);
+  }
+
   @Roles(...MANAGER_ROLES)
   @Delete(':scheduleId')
   async remove(

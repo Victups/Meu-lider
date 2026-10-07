@@ -4,12 +4,17 @@ import { Repository } from 'typeorm';
 import { ResourceType } from '../../common/constants';
 import {
   DuplicateScheduleException,
+  EventNotStartedException,
   InsufficientPermissionException,
   InvalidScheduleTransitionException,
   ResourceNotFoundException,
   TeamRoleNotInTeamException,
 } from '../../common/exceptions';
 import type { JwtUser } from '../../common/interfaces';
+import { formatEventWhen } from '../../common/utils';
+import { LeaderNotificationsService } from '../notifications/leader-notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entity';
+import { PushNotificationService } from '../notifications/push-notification.service';
 import { TeamRole } from '../teams/entities/team-role.entity';
 import { CreateScheduleDto } from './dtos/create-schedule.dto';
 import { ScheduleResponseDto } from './dtos/schedule-response.dto';
@@ -36,6 +41,8 @@ export class SchedulesService implements ISchedulesService {
     private readonly teamAccessService: TeamAccessService,
     @InjectRepository(Member)
     private readonly membersRepository: Repository<Member>,
+    private readonly pushService: PushNotificationService,
+    private readonly leaderNotifications: LeaderNotificationsService,
   ) {}
 
   async create(
@@ -56,7 +63,18 @@ export class SchedulesService implements ISchedulesService {
     }
 
     const schedule = this.schedulesRepository.create(createScheduleDto);
-    return toScheduleSummary(await this.schedulesRepository.save(schedule));
+    const saved = await this.schedulesRepository.save(schedule);
+
+    await this.safely(async () => {
+      const full = await this.findScheduleEntity(saved.id);
+      await this.notifyMember(full, {
+        type: NotificationType.SCHEDULE_ASSIGNED,
+        title: 'Você foi escalado(a)!',
+        message: `${full.teamRole?.name ?? 'Escala'} — ${full.event.name}, ${formatEventWhen(full.event.eventDate)}.`,
+      });
+    });
+
+    return toScheduleSummary(saved);
   }
 
   async findOne(id: string): Promise<ScheduleResponseDto> {
@@ -103,7 +121,24 @@ export class SchedulesService implements ISchedulesService {
     schedule.releaseReason = reason;
     schedule.releaseRequestedAt = new Date();
 
-    return toScheduleResponse(await this.schedulesRepository.save(schedule));
+    const saved = await this.schedulesRepository.save(schedule);
+
+    await this.safely(() =>
+      this.leaderNotifications.notifyTeamLeaders(
+        schedule.event.churchId,
+        schedule.teamId,
+        {
+          type: NotificationType.RELEASE_REQUESTED,
+          title: 'Pedido para sair da escala',
+          message: `${schedule.member.fullName} pediu para sair de ${schedule.event.name} (${formatEventWhen(schedule.event.eventDate)}): “${reason}”.`,
+          relatedScheduleId: schedule.id,
+          relatedEventId: schedule.eventId,
+        },
+        user.id,
+      ),
+    );
+
+    return toScheduleResponse(saved);
   }
 
   /** Leader agrees the member is out: the slot opens and the engine refills. */
@@ -111,7 +146,7 @@ export class SchedulesService implements ISchedulesService {
     const schedule = await this.findScheduleEntity(id);
     await this.teamAccessService.assertCanManageTeam(schedule.teamId, user);
 
-    return this.releaseAndRefill(schedule);
+    return this.releaseAndRefill(schedule, 'approved');
   }
 
   /** Leader turns the request down; the member stays on the roster. */
@@ -127,7 +162,17 @@ export class SchedulesService implements ISchedulesService {
     schedule.releaseReason = null;
     schedule.releaseRequestedAt = null;
 
-    return toScheduleResponse(await this.schedulesRepository.save(schedule));
+    const saved = await this.schedulesRepository.save(schedule);
+
+    await this.safely(() =>
+      this.notifyMember(schedule, {
+        type: NotificationType.SCHEDULE_CHANGED,
+        title: 'Pedido de saída recusado',
+        message: `Você segue escalado(a) em ${schedule.event.name} (${formatEventWhen(schedule.event.eventDate)}).`,
+      }),
+    );
+
+    return toScheduleResponse(saved);
   }
 
   /** Leader pulling someone out directly — they warned by phone, say. */
@@ -143,12 +188,52 @@ export class SchedulesService implements ISchedulesService {
       schedule.releaseReason = reason;
     }
 
-    return this.releaseAndRefill(schedule);
+    return this.releaseAndRefill(schedule, 'by-leader');
   }
 
-  private async releaseAndRefill(schedule: Schedule): Promise<ScheduleResponseDto> {
+  async markNoShow(id: string, user: JwtUser): Promise<ScheduleResponseDto> {
+    const schedule = await this.findScheduleEntity(id);
+    await this.teamAccessService.assertCanManageTeam(schedule.teamId, user);
+    this.assertEventStarted(schedule);
+
+    const attending =
+      schedule.status === ScheduleStatus.SCHEDULED || schedule.status === ScheduleStatus.CONFIRMED;
+    if (!attending) {
+      throw new InvalidScheduleTransitionException(
+        'Só quem estava escalado pode ser marcado como ausente',
+      );
+    }
+
+    schedule.status = ScheduleStatus.NO_SHOW;
+    return toScheduleResponse(await this.schedulesRepository.save(schedule));
+  }
+
+  async markAttended(id: string, user: JwtUser): Promise<ScheduleResponseDto> {
+    const schedule = await this.findScheduleEntity(id);
+    await this.teamAccessService.assertCanManageTeam(schedule.teamId, user);
+
+    if (schedule.status !== ScheduleStatus.NO_SHOW) {
+      throw new InvalidScheduleTransitionException('Esta escala não está marcada como falta');
+    }
+
+    schedule.status = ScheduleStatus.SCHEDULED;
+    return toScheduleResponse(await this.schedulesRepository.save(schedule));
+  }
+
+  private async releaseAndRefill(
+    schedule: Schedule,
+    origin: 'approved' | 'by-leader',
+  ): Promise<ScheduleResponseDto> {
     schedule.status = ScheduleStatus.CANCELLED;
     const saved = await this.schedulesRepository.save(schedule);
+
+    await this.safely(() =>
+      this.notifyMember(schedule, {
+        type: NotificationType.SCHEDULE_CANCELLED,
+        title: origin === 'approved' ? 'Pedido de saída aprovado' : 'Você saiu da escala',
+        message: `${schedule.event.name} (${formatEventWhen(schedule.event.eventDate)}) não conta mais na sua escala.`,
+      }),
+    );
 
     try {
       await this.autoScheduleService.refillEvent(saved.eventId, saved.teamRoleId);
@@ -210,6 +295,14 @@ export class SchedulesService implements ISchedulesService {
     await this.teamAccessService.assertCanManageTeam(schedule.teamId, user);
 
     await this.schedulesRepository.delete(schedule.id);
+
+    await this.safely(() =>
+      this.notifyMember(schedule, {
+        type: NotificationType.SCHEDULE_CANCELLED,
+        title: 'Você saiu da escala',
+        message: `${schedule.event.name} (${formatEventWhen(schedule.event.eventDate)}) não conta mais na sua escala.`,
+      }),
+    );
   }
 
   async getStatistics(eventId: string): Promise<ScheduleStatistics> {
@@ -237,8 +330,40 @@ export class SchedulesService implements ISchedulesService {
     }
   }
 
+  private assertEventStarted(schedule: Schedule): void {
+    if (schedule.event.eventDate.getTime() > Date.now()) {
+      throw new EventNotStartedException();
+    }
+  }
+
   private countByStatus(schedules: Schedule[], status: ScheduleStatus): number {
     return schedules.filter((schedule) => schedule.status === status).length;
+  }
+
+  private notifyMember(
+    schedule: Schedule,
+    content: { type: NotificationType; title: string; message: string },
+  ): Promise<void> {
+    const userId = schedule.member?.userId;
+    if (!userId) return Promise.resolve();
+
+    return this.pushService.send({
+      userId,
+      ...content,
+      relatedScheduleId: content.type === NotificationType.SCHEDULE_CANCELLED ? undefined : schedule.id,
+      relatedEventId: schedule.eventId,
+    });
+  }
+
+  /** A notification that fails must never undo or fail the action behind it. */
+  private async safely(action: () => Promise<unknown>): Promise<void> {
+    try {
+      await action();
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao notificar: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   private async findScheduleEntity(id: string): Promise<Schedule> {

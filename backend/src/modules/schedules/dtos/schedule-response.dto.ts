@@ -12,6 +12,9 @@ export class ScheduleResponseDto {
   memberId: string;
   teamRoleId: string;
   status: ScheduleStatus;
+  /** Why the member asked out, while the request is pending. */
+  releaseReason: string | null;
+  releaseRequestedAt: Date | null;
   confirmedAt: Date | null;
   confirmedById: string | null;
   notes: string | null;
