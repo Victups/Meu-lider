@@ -14,6 +14,9 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   restoreSession: () => Promise<void>;
+  /** Picks up server-side changes to the account, such as being appointed leader. */
+  refreshUser: () => Promise<void>;
+  setUser: (user: User) => void;
   signIn: (input: LoginInput) => Promise<void>;
   signUp: (input: RegisterInput) => Promise<void>;
   signOut: () => Promise<void>;
@@ -38,6 +41,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },
+
+  refreshUser: async () => {
+    try {
+      set({ user: await authService.me() });
+    } catch {
+      // offline: keep the cached account
+    }
+  },
+
+  setUser: (user) => set({ user }),
 
   signIn: async (input) => {
     const session = await authService.login(input);
