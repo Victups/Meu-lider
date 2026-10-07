@@ -87,3 +87,18 @@ export interface ScheduleGap {
   missingSlots: number;
   reason: string;
 }
+
+/** The month's roster as WhatsApp-ready text. */
+export interface ShareText {
+  month: string;
+  text: string;
+  eventCount: number;
+}
+
+export interface MemberParticipation {
+  memberId: ID;
+  fullName: string;
+  served: number;
+  noShow: number;
+  upcoming: number;
+}
