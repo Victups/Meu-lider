@@ -9,6 +9,7 @@ import { eventsService, teamsService } from '@/services';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import { buildRecurrenceRule, type RecurrenceSelection } from '@/lib/recurrence';
 import type { Team } from '@/types';
 
@@ -20,6 +21,7 @@ function nextHour(): Date {
 
 export default function NewEventScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const currentChurch = useChurchStore((s) => s.currentChurch);
 
@@ -172,7 +174,7 @@ export default function NewEventScreen() {
         </Button>
       </View>
 
-      <Snackbar visible={error !== null} onDismiss={() => setError(null)} duration={4000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={error !== null} onDismiss={() => setError(null)} duration={4000}>
         {error ?? ''}
       </Snackbar>
     </Screen>

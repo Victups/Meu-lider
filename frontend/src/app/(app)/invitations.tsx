@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { Invitation, Team } from '@/types';
 
 const NO_TEAM = 'none';
@@ -24,6 +25,7 @@ const VALIDITY = [
 /** Short codes a leader hands out; whoever signs up with one joins the church (and team). */
 export default function InvitationsScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const { teamId: presetTeam } = useLocalSearchParams<{ teamId?: string }>();
   const currentChurch = useChurchStore((s) => s.currentChurch);
   const isAdmin = useAuthStore((s) => s.isAdmin);
@@ -130,7 +132,7 @@ export default function InvitationsScreen() {
       <FlatList
         data={invitations}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={invitations.length === 0 ? styles.emptyList : styles.list}
+        contentContainerStyle={[invitations.length === 0 ? styles.emptyList : styles.list, clearance > 0 && { paddingBottom: clearance + 72 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <EmptyState
@@ -141,8 +143,8 @@ export default function InvitationsScreen() {
             onAction={error ? load : undefined}
           />
         }
-        renderItem={({ item }) => (
-          <Card>
+        renderItem={({ item, index }) => (
+          <Card index={index}>
             <Text style={[styles.code, { color: theme.colors.primary }]}>{item.code}</Text>
             <Text style={[styles.line, { color: theme.app.textMuted }]}>
               {item.teamName ? `Equipe ${item.teamName}` : 'Sem equipe'} · vale até{' '}
@@ -159,7 +161,7 @@ export default function InvitationsScreen() {
         )}
       />
 
-      <FAB icon="plus" label="Novo convite" style={styles.fab} onPress={() => setCreating(true)} />
+      <FAB icon="plus" label="Novo convite" style={[styles.fab, { bottom: clearance || spacing.lg }]} onPress={() => setCreating(true)} />
 
       <Sheet
         visible={creating}
@@ -192,7 +194,7 @@ export default function InvitationsScreen() {
         <SelectField label="Validade" value={days} onSelect={setDays} options={VALIDITY} />
       </Sheet>
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

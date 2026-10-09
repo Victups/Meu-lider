@@ -15,9 +15,11 @@ interface ScheduleCardProps {
   /** Trade this date with a colleague, without going through a leader. */
   onRequestSwap?: () => void;
   busy?: boolean;
+  /** Position in the list, for the staggered entrance. */
+  index?: number;
 }
 
-export function ScheduleCard({ schedule, onRequestRelease, onRequestSwap, busy }: ScheduleCardProps) {
+export function ScheduleCard({ schedule, onRequestRelease, onRequestSwap, busy, index }: ScheduleCardProps) {
   const theme = useAppTheme();
   const { event, team, teamRole, status, releaseReason } = schedule;
 
@@ -26,7 +28,7 @@ export function ScheduleCard({ schedule, onRequestRelease, onRequestSwap, busy }
   const awaitingLeader = status === 'RELEASE_REQUESTED';
 
   return (
-    <Card accentColor={team?.color}>
+    <Card accentColor={team?.color} index={index}>
       <View style={styles.topRow}>
         <View style={styles.titleBlock}>
           <Text style={[styles.eventName, { color: theme.app.text }]}>

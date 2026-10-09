@@ -15,6 +15,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { Church, UpdateChurchInput } from '@/types';
 
 const MIN_NAME_LENGTH = 3;
@@ -72,6 +73,7 @@ function buildPayload(form: ChurchForm, loaded: ChurchForm): UpdateChurchInput {
 
 export default function ChurchSettingsScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const currentChurch = useChurchStore((s) => s.currentChurch);
   const replaceChurch = useChurchStore((s) => s.replaceChurch);
@@ -181,7 +183,7 @@ export default function ChurchSettingsScreen() {
 
   return (
     <Screen padded={false}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.content, clearance > 0 && { paddingBottom: clearance + spacing.lg }]} keyboardShouldPersistTaps="handled">
         <List.Section>
           <List.Subheader>Configurações</List.Subheader>
           <List.Item
@@ -337,7 +339,7 @@ export default function ChurchSettingsScreen() {
         )}
       </ScrollView>
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

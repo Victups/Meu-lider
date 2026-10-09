@@ -10,6 +10,7 @@ import { schedulesService } from '@/services';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { MemberParticipation } from '@/types';
 
 function Stat({ value, label }: { value: number; label: string }) {
@@ -26,6 +27,7 @@ function Stat({ value, label }: { value: number; label: string }) {
 /** Who carries the rota this month: served, missed and still ahead. */
 export default function ReportsScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const currentChurch = useChurchStore((s) => s.currentChurch);
 
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
@@ -95,7 +97,7 @@ export default function ReportsScreen() {
         <FlatList
           data={rows}
           keyExtractor={(item) => item.memberId}
-          contentContainerStyle={rows.length === 0 ? styles.emptyList : styles.list}
+          contentContainerStyle={[rows.length === 0 ? styles.emptyList : styles.list, clearance > 0 && { paddingBottom: clearance + spacing.lg }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
             <EmptyState
@@ -103,8 +105,8 @@ export default function ReportsScreen() {
               title={error ?? 'Sem escalas neste mês'}
             />
           }
-          renderItem={({ item }) => (
-            <Card>
+          renderItem={({ item, index }) => (
+            <Card index={index}>
               <View style={styles.row}>
                 <Avatar name={item.fullName} size={40} />
                 <Text style={[styles.name, { color: theme.app.text }]}>{item.fullName}</Text>

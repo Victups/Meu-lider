@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import { USER_ROLE_LABEL, canManageSomeTeam, canSeeAllRosters } from '@/types';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -17,6 +18,7 @@ type Panel = 'signOut' | 'profile' | 'password' | null;
 
 export default function ProfileScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const { user, signOut, setUser } = useAuthStore();
   const currentChurch = useChurchStore((s) => s.currentChurch);
@@ -215,7 +217,7 @@ export default function ProfileScreen() {
         </HelperText>
       </Sheet>
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3500}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={3500}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

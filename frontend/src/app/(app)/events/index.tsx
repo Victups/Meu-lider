@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { Event } from '@/types';
 
 type EventsView = 'list' | 'calendar';
@@ -24,6 +25,7 @@ const VIEWS: ViewOption<EventsView>[] = [
 
 export default function EventsScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const currentChurch = useChurchStore((s) => s.currentChurch);
   const canManage = useAuthStore((s) => s.canManageTeams);
@@ -139,14 +141,14 @@ export default function EventsScreen() {
           data={events}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={header}
-          contentContainerStyle={events.length === 0 ? styles.emptyList : styles.list}
+          contentContainerStyle={[events.length === 0 ? styles.emptyList : styles.list, clearance > 0 && { paddingBottom: clearance + 72 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={emptyState}
           renderItem={({ item }) => renderEventCard(item)}
         />
       ) : (
         <ScrollView
-          contentContainerStyle={styles.calendarContent}
+          contentContainerStyle={[styles.calendarContent, clearance > 0 && { paddingBottom: clearance + 72 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
           {header}
@@ -179,7 +181,7 @@ export default function EventsScreen() {
       )}
 
       {canManage() ? (
-        <FAB icon="plus" style={styles.fab} onPress={() => router.push('/events/new')} />
+        <FAB icon="plus" style={[styles.fab, { bottom: clearance || spacing.lg }]} onPress={() => router.push('/events/new')} />
       ) : null}
     </Screen>
   );

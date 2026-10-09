@@ -10,10 +10,12 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { Team } from '@/types';
 
 export default function TeamsScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const currentChurch = useChurchStore((s) => s.currentChurch);
   const canManage = useAuthStore((s) => s.canManageTeams);
@@ -72,7 +74,7 @@ export default function TeamsScreen() {
       <FlatList
         data={teams}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={teams.length === 0 ? styles.emptyList : styles.list}
+        contentContainerStyle={[teams.length === 0 ? styles.emptyList : styles.list, clearance > 0 && { paddingBottom: clearance + 72 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <EmptyState
@@ -83,8 +85,9 @@ export default function TeamsScreen() {
             onAction={error ? load : canManage() ? () => router.push('/teams/new') : undefined}
           />
         }
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <Card
+            index={index}
             accentColor={item.color}
             onPress={() => router.push({ pathname: '/teams/[teamId]', params: { teamId: item.id } })}
           >
@@ -108,7 +111,7 @@ export default function TeamsScreen() {
       />
 
       {canManage() ? (
-        <FAB icon="plus" style={styles.fab} onPress={() => router.push('/teams/new')} />
+        <FAB icon="plus" style={[styles.fab, { bottom: clearance || spacing.lg }]} onPress={() => router.push('/teams/new')} />
       ) : null}
     </Screen>
   );

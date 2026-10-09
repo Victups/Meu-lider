@@ -10,6 +10,7 @@ import { schedulesService, swapsService } from '@/services';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { ID, Schedule, SwapCandidateMember } from '@/types';
 
 type Mode = 'exchange' | 'handover';
@@ -17,6 +18,7 @@ type Mode = 'exchange' | 'handover';
 /** Member-to-member: trade dates with a colleague, or hand the slot over. No leader in the middle. */
 export default function SwapRequestScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const { scheduleId } = useLocalSearchParams<{ scheduleId: string }>();
   const currentChurch = useChurchStore((s) => s.currentChurch);
@@ -92,7 +94,7 @@ export default function SwapRequestScreen() {
 
   return (
     <Screen padded={false}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.content, clearance > 0 && { paddingBottom: clearance + spacing.lg }]} keyboardShouldPersistTaps="handled">
         <Text style={[styles.title, { color: theme.app.text }]}>Pedir troca</Text>
         <Text style={[styles.subtitle, { color: theme.app.textMuted }]}>
           {schedule.event?.name} · {schedule.event ? formatWhen(schedule.event.eventDate) : ''}
@@ -189,7 +191,7 @@ export default function SwapRequestScreen() {
         ) : null}
       </ScrollView>
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={4000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={4000}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

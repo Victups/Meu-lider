@@ -15,9 +15,10 @@ import { teamsService } from '@/services';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 
 const TEAM_COLORS = [
-  '#4D5AC4',
+  '#7A2F76',
   '#2E9E6B',
   '#C27F1E',
   '#D1485B',
@@ -38,6 +39,7 @@ function toSlug(value: string): string {
 
 export default function NewTeamScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const currentChurch = useChurchStore((s) => s.currentChurch);
 
@@ -126,7 +128,7 @@ export default function NewTeamScreen() {
         </Button>
       </View>
 
-      <Snackbar visible={error !== null} onDismiss={() => setError(null)} duration={4000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={error !== null} onDismiss={() => setError(null)} duration={4000}>
         {error ?? ''}
       </Snackbar>
     </Screen>

@@ -14,6 +14,7 @@ import { useChurchStore } from '@/stores/church';
 import { useNotificationsStore } from '@/stores/notifications';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import { canManageSomeTeam, canSeeAllRosters, type Schedule, type Team } from '@/types';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -45,6 +46,7 @@ function Shortcut({ icon, label, onPress }: { icon: IconName; label: string; onP
 /** The member's day-to-day: what is next, what needs an answer, and the leader's shortcuts. */
 export default function HomeScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const refreshUser = useAuthStore((s) => s.refreshUser);
@@ -142,7 +144,7 @@ export default function HomeScreen() {
   return (
     <Screen padded={false}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, clearance > 0 && { paddingBottom: clearance + spacing.lg }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.header}>
@@ -241,7 +243,7 @@ export default function HomeScreen() {
         />
       ) : null}
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

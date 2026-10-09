@@ -1,6 +1,8 @@
 export { Avatar } from './Avatar';
 export { Card } from './Card';
 export { EmptyState } from './EmptyState';
+export { GlassTabBar, type GlassTabItem } from './GlassTabBar';
+export { GlassTabBarBackground } from './GlassTabBarBackground';
 export { RoleChip } from './RoleChip';
 export { Screen } from './Screen';
 export { Sheet } from './Sheet';

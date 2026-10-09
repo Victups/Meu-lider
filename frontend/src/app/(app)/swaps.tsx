@@ -9,6 +9,7 @@ import { swapsService } from '@/services';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { ID, MySwaps, Schedule, ScheduleSwap, SwapStatus } from '@/types';
 
 const STATUS_LABEL: Record<SwapStatus, string> = {
@@ -23,6 +24,7 @@ const describe = (schedule?: Schedule) =>
 
 export default function SwapsScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const currentChurch = useChurchStore((s) => s.currentChurch);
 
   const [swaps, setSwaps] = useState<MySwaps>({ incoming: [], outgoing: [] });
@@ -86,7 +88,7 @@ export default function SwapsScreen() {
   return (
     <Screen padded={false}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, clearance > 0 && { paddingBottom: clearance + spacing.lg }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text style={[styles.title, { color: theme.app.text }]}>Trocas</Text>
@@ -192,7 +194,7 @@ export default function SwapsScreen() {
         ) : null}
       </ScrollView>
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

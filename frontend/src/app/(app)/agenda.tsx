@@ -13,10 +13,12 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { Event } from '@/types';
 
 export default function AgendaFixaScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const currentChurch = useChurchStore((s) => s.currentChurch);
   const isAdmin = useAuthStore((s) => s.isAdmin);
@@ -140,7 +142,7 @@ export default function AgendaFixaScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         data={templates}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, clearance > 0 && { paddingBottom: clearance + 72 }]}
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.app.text }]}>Agenda Fixa</Text>
@@ -214,7 +216,7 @@ export default function AgendaFixaScreen() {
       {canEdit ? (
         <FAB
           icon="plus"
-          style={styles.fab}
+          style={[styles.fab, { bottom: clearance || spacing.lg }]}
           onPress={() => router.push('/events/new')}
         />
       ) : null}
@@ -245,7 +247,7 @@ export default function AgendaFixaScreen() {
         <View />
       </Sheet>
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

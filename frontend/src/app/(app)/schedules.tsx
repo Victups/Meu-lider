@@ -10,10 +10,12 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { ID, Schedule } from '@/types';
 
 export default function SchedulesScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const currentChurch = useChurchStore((s) => s.currentChurch);
@@ -120,7 +122,7 @@ export default function SchedulesScreen() {
       <FlatList
         data={schedules}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={schedules.length === 0 ? styles.emptyList : styles.list}
+        contentContainerStyle={[schedules.length === 0 ? styles.emptyList : styles.list, clearance > 0 && { paddingBottom: clearance + spacing.lg }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <EmptyState
@@ -133,9 +135,10 @@ export default function SchedulesScreen() {
             onAction={error ? load : undefined}
           />
         }
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <ScheduleCard
             schedule={item}
+            index={index}
             busy={actingOn === item.id}
             onRequestSwap={() =>
               router.push({ pathname: '/swap-request', params: { scheduleId: item.id } } as unknown as Href)
@@ -186,7 +189,7 @@ export default function SchedulesScreen() {
         />
       </Sheet>
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

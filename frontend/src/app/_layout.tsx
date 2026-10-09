@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -53,14 +53,23 @@ export default function RootLayout() {
 
   if (!fontsLoaded || isLoading) return null;
 
+  // The navigator paints its own white behind screens during transitions unless told otherwise.
+  const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+  const navigationTheme = {
+    ...base,
+    colors: { ...base.colors, background: theme.app.canvas, card: theme.app.surface, border: theme.app.border },
+  };
+
   return (
     <SafeAreaProvider>
       <PaperProvider theme={theme}>
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.app.canvas } }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(app)" />
-        </Stack>
+        <ThemeProvider value={navigationTheme}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.app.canvas } }}>
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(app)" />
+          </Stack>
+        </ThemeProvider>
       </PaperProvider>
     </SafeAreaProvider>
   );

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { radius, spacing } from '../../theme';
 import { useAppTheme } from '../../theme/use-app-theme';
 
@@ -9,9 +10,15 @@ interface CardProps {
   /** Vertical colour strip on the left edge — used to tint a card by team. */
   accentColor?: string | null;
   style?: ViewStyle;
+  /** Position in a list: the first few cards ease in one after another. */
+  index?: number;
 }
 
-export function Card({ children, onPress, accentColor, style }: CardProps) {
+/** Cards beyond this position just appear, so scrolling a long list never feels busy. */
+const STAGGERED_CARDS = 8;
+const STAGGER_MS = 45;
+
+export function Card({ children, onPress, accentColor, style, index }: CardProps) {
   const theme = useAppTheme();
 
   const surface: ViewStyle = {
@@ -26,12 +33,20 @@ export function Card({ children, onPress, accentColor, style }: CardProps) {
     </View>
   );
 
-  if (!onPress) return content;
-
-  return (
+  const body = onPress ? (
     <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
       {content}
     </Pressable>
+  ) : (
+    content
+  );
+
+  if (index !== undefined && index >= STAGGERED_CARDS) return body;
+
+  return (
+    <Animated.View entering={FadeInDown.duration(260).delay((index ?? 0) * STAGGER_MS)}>
+      {body}
+    </Animated.View>
   );
 }
 
@@ -44,5 +59,6 @@ const styles = StyleSheet.create({
   },
   accent: { width: 4 },
   body: { flex: 1, padding: spacing.lg },
-  pressed: { opacity: 0.7 },
+  // A touch smaller and lighter while pressed, like a physical button.
+  pressed: { opacity: 0.8, transform: [{ scale: 0.985 }] },
 });

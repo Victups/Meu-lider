@@ -15,10 +15,12 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { Event, EventTeamLink, Member, Schedule, Team, TeamRole } from '@/types';
 
 export default function EventDetailScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const navigation = useNavigation();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const currentChurch = useChurchStore((s) => s.currentChurch);
@@ -338,7 +340,7 @@ export default function EventDetailScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         data={schedules}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, clearance > 0 && { paddingBottom: clearance + 72 }]}
         ListHeaderComponent={
           <View style={styles.header}>
             {event ? (
@@ -461,7 +463,7 @@ export default function EventDetailScreen() {
       />
 
       {canManage ? (
-        <FAB icon="account-plus" style={styles.fab} onPress={() => setFormOpen(true)} />
+        <FAB icon="account-plus" style={[styles.fab, { bottom: clearance || spacing.lg }]} onPress={() => setFormOpen(true)} />
       ) : null}
 
       {/* Auto-schedule: leader picks which roles to fill */}
@@ -703,7 +705,7 @@ export default function EventDetailScreen() {
         </Button>
       </Sheet>
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

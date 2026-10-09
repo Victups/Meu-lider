@@ -11,6 +11,7 @@ import { toUserMessage } from '@/lib/errors';
 import { availabilityService } from '@/services';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { Availability } from '@/types';
 
 const WEEKDAYS = [
@@ -39,6 +40,7 @@ function endOfToday(): Date {
 
 export default function AvailabilityScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const { member, loading: loadingMember } = useCurrentMember();
 
   const [available, setAvailable] = useState<number[]>(EVERY_DAY);
@@ -160,7 +162,7 @@ export default function AvailabilityScreen() {
 
   return (
     <Screen padded={false}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, clearance > 0 && { paddingBottom: clearance + spacing.lg }]}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.app.text }]}>Disponibilidade</Text>
         </View>
@@ -325,7 +327,7 @@ export default function AvailabilityScreen() {
         />
       </Sheet>
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={2500}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={2500}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

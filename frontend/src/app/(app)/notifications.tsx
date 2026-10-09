@@ -12,6 +12,7 @@ import { notificationsService } from '@/services';
 import { useNotificationsStore } from '@/stores/notifications';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { Notification, NotificationType } from '@/types';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -31,6 +32,7 @@ const ICONS: Record<NotificationType, IconName> = {
 
 export default function NotificationsScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const router = useRouter();
   const setUnread = useNotificationsStore((s) => s.setUnread);
 
@@ -110,7 +112,7 @@ export default function NotificationsScreen() {
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={items.length === 0 ? styles.emptyList : styles.list}
+        contentContainerStyle={[items.length === 0 ? styles.emptyList : styles.list, clearance > 0 && { paddingBottom: clearance + spacing.lg }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <EmptyState
@@ -121,9 +123,9 @@ export default function NotificationsScreen() {
             onAction={error ? load : undefined}
           />
         }
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <Pressable onPress={() => open(item)}>
-            <Card>
+            <Card index={index}>
               <View style={styles.row}>
                 <View
                   style={[
@@ -158,7 +160,7 @@ export default function NotificationsScreen() {
         )}
       />
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={3000}>
         {toast ?? ''}
       </Snackbar>
     </Screen>

@@ -12,12 +12,14 @@ import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
 import { useAppTheme } from '@/theme/use-app-theme';
+import { useTabClearance } from '@/hooks/use-tab-clearance';
 import type { ID, Member, Team, TeamMember, TeamRole } from '@/types';
 
 type RolesByMember = Record<ID, TeamRole[]>;
 
 export default function TeamDetailScreen() {
   const theme = useAppTheme();
+  const clearance = useTabClearance();
   const navigation = useNavigation();
   const router = useRouter();
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
@@ -229,7 +231,7 @@ export default function TeamDetailScreen() {
     <Screen padded={false}>
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, clearance > 0 && { paddingBottom: clearance + 72 }]}
       >
         {team?.description ? (
           <Text style={[styles.description, { color: theme.app.textMuted }]}>
@@ -376,7 +378,7 @@ export default function TeamDetailScreen() {
       </ScrollView>
 
       {canManage ? (
-        <FAB icon="account-plus" style={styles.fab} onPress={() => setAddMemberOpen(true)} />
+        <FAB icon="account-plus" style={[styles.fab, { bottom: clearance || spacing.lg }]} onPress={() => setAddMemberOpen(true)} />
       ) : null}
 
       <Sheet
@@ -515,7 +517,7 @@ export default function TeamDetailScreen() {
         />
       ) : null}
 
-      <Snackbar visible={toast !== null} onDismiss={() => setToast(null)} duration={2500}>
+      <Snackbar wrapperStyle={{ bottom: clearance }} visible={toast !== null} onDismiss={() => setToast(null)} duration={2500}>
         {toast ?? ''}
       </Snackbar>
     </Screen>
