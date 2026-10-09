@@ -1,4 +1,7 @@
 {
+  "installCommand": "npm install --no-audit --no-fund",
+  "buildCommand": "npx expo export --platform web",
+  "outputDirectory": "dist",
   "cleanUrls": true,
   "rewrites": [
     { "source": "/events/:eventId", "destination": "/events/[eventId].html" },
