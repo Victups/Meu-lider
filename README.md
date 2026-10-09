@@ -39,6 +39,12 @@ Todo domingo alguém pergunta "quem está escalado hoje?". O Meu Líder responde
 | Notificações | Caixa de entrada no app + push (Expo) |
 | Hospedagem gratuita | Neon (banco), Render (API), Vercel (PWA), EAS Build (APK) |
 
+### Linguagens
+
+- **TypeScript** em todo o projeto: API (cerca de 14 mil linhas) e app (cerca de 7 mil linhas).
+- **SQL** nas migrations do banco (TypeORM).
+- **Docker** (`Dockerfile`, `docker-compose.yml`) e **GitHub Actions** (CI e build do APK) para infraestrutura.
+
 ## Rodando localmente
 
 Pré-requisitos: Node 20+ e Docker.
@@ -108,3 +114,7 @@ Documentação de apoio: [DOMAIN_MODEL.md](DOMAIN_MODEL.md)
 
 - Notificação push no Android depende de configurar o Firebase (FCM) no EAS.
 - No iPhone (PWA) os avisos aparecem só dentro do app; push no iOS exigiria Web Push.
+
+## Licença
+
+Software **proprietário** (`UNLICENSED`): todos os direitos reservados. O código não pode ser copiado, distribuído ou usado sem autorização do autor. As bibliotecas de terceiros mantêm suas próprias licenças (em geral MIT).
