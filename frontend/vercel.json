@@ -1,0 +1,7 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/events/:eventId", "destination": "/events/[eventId].html" },
+    { "source": "/teams/:teamId", "destination": "/teams/[teamId].html" }
+  ]
+}
