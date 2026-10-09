@@ -9,10 +9,12 @@ import {
   TeamRoleSlugAlreadyExistsException,
 } from '../../common/exceptions';
 import type { JwtUser } from '../../common/interfaces';
+import { toDateOnlyString } from '../../common/utils';
 import { UserRole } from '../users/entities/user.entity';
 import { AssignTeamRoleDto } from './dtos/assign-team-role.dto';
 import { CreateTeamRoleDto } from './dtos/create-team-role.dto';
 import { TeamMemberRoleResponseDto } from './dtos/team-member-role-response.dto';
+import { TeamMemberResponseDto } from './dtos/team-member-response.dto';
 import { TeamRoleResponseDto } from './dtos/team-role-response.dto';
 import { UpdateTeamRoleDto } from './dtos/update-team-role.dto';
 import { TeamMember } from './entities/team-member.entity';
@@ -24,6 +26,7 @@ import {
   toTeamMemberRoleResponse,
   toTeamMemberRoleResponseList,
 } from './mappers/team-member-role.mapper';
+import { toTeamMemberDetailList } from './mappers/team-member-detail.mapper';
 import { toTeamRoleResponse, toTeamRoleResponseList } from './mappers/team-role.mapper';
 
 @Injectable()
@@ -73,6 +76,23 @@ export class TeamRolesService implements ITeamRolesService {
 
   async findOne(teamId: string, roleId: string): Promise<TeamRoleResponseDto> {
     return toTeamRoleResponse(await this.findTeamRoleEntity(teamId, roleId));
+  }
+
+  /** Active people of the team who cover this position — who a leader may put in it. */
+  async findMembersCoveringRole(teamId: string, roleId: string): Promise<TeamMemberResponseDto[]> {
+    await this.findTeamRoleEntity(teamId, roleId);
+
+    const today = toDateOnlyString(new Date());
+    const teamMembers = await this.teamMembersRepository.find({
+      where: { teamId, roles: { teamRoleId: roleId }, member: { status: 'active' } },
+      relations: { member: true },
+    });
+
+    return toTeamMemberDetailList(
+      teamMembers
+        .filter((entry) => !entry.endedAt || toDateOnlyString(entry.endedAt) >= today)
+        .sort((a, b) => a.member.fullName.localeCompare(b.member.fullName, 'pt-BR')),
+    );
   }
 
   async update(

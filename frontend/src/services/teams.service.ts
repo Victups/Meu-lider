@@ -66,6 +66,14 @@ export const teamsService = {
     return data;
   },
 
+  /** People of the team who cover this position. */
+  async listRoleMembers(churchId: ID, teamId: ID, roleId: ID): Promise<TeamMember[]> {
+    const { data } = await http.get<TeamMember[]>(
+      `/churches/${churchId}/teams/${teamId}/roles/${roleId}/members`,
+    );
+    return data;
+  },
+
   async createRole(churchId: ID, teamId: ID, input: CreateTeamRoleInput): Promise<TeamRole> {
     const { data } = await http.post<TeamRole>(
       `/churches/${churchId}/teams/${teamId}/roles`,

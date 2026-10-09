@@ -226,6 +226,12 @@ describe('Igreja Escala — fluxos de ponta a ponta (banco descartável)', () =>
       }
       u.m3.token = (await login(u.m3.email)).accessToken;
 
+      // The manual roster form: only people who cover the chosen position are offered.
+      const covering = async (role: string) =>
+        (await api<any[]>('GET', `/churches/${churchId}/teams/${teamA}/roles/${role}/members`, u.m2.token)).body.map((t) => t.memberId).sort();
+      expect(await covering(dsRole)).toEqual([u.m1.memberId, u.m2.memberId].sort());
+      expect(await covering(liveRole)).toEqual([u.m2.memberId, u.m3.memberId].sort());
+
       const led = async (token: string) =>
         (await api<any[]>('GET', `/churches/${churchId}/teams/led`, token)).body.map((t) => t.id).sort();
       expect(await led(u.m2.token)).toEqual([teamA]);

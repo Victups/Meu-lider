@@ -10,7 +10,7 @@ import { Avatar, Card, EmptyState, RoleChip, Screen, Sheet, StatusBadge } from '
 import { toUserMessage } from '@/lib/errors';
 import { hasStarted, holdsSlot, statusLabel } from '@/lib/schedule';
 import { describeRecurrence, parseRecurrenceRule } from '@/lib/recurrence';
-import { eventsService, membersService, schedulesService, teamsService } from '@/services';
+import { eventsService, schedulesService, teamsService } from '@/services';
 import { useAuthStore } from '@/stores/auth';
 import { useChurchStore } from '@/stores/church';
 import { fontFamily, fontSize, radius, spacing } from '@/theme';
@@ -29,8 +29,6 @@ export default function EventDetailScreen() {
 
   const [event, setEvent] = useState<Event | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -44,6 +42,7 @@ export default function EventDetailScreen() {
   const [memberId, setMemberId] = useState<string | null>(null);
   const [teamRoleId, setTeamRoleId] = useState<string | null>(null);
   const [roles, setRoles] = useState<TeamRole[]>([]);
+  const [rolePeople, setRolePeople] = useState<Member[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Auto-schedule by leader: select which roles to fill
@@ -73,18 +72,14 @@ export default function EventDetailScreen() {
     if (!currentChurch || !eventId) return;
     try {
       setError(null);
-      const [loadedEvent, loadedSchedules, loadedTeams, loadedMembers, led] = await Promise.all([
+      const [loadedEvent, loadedSchedules, led] = await Promise.all([
         eventsService.getById(currentChurch.id, eventId),
         schedulesService.listByEvent(currentChurch.id, eventId),
-        teamsService.list(currentChurch.id),
-        membersService.list(currentChurch.id),
         teamsService.listLed(currentChurch.id).catch(() => [] as Team[]),
       ]);
 
       setEvent(loadedEvent);
       setSchedules(loadedSchedules);
-      setTeams(loadedTeams);
-      setMembers(loadedMembers);
       setLedTeams(led);
       navigation.setOptions({ title: loadedEvent.name });
     } catch (err) {
@@ -119,9 +114,10 @@ export default function EventDetailScreen() {
     const takenInTeam = new Set(
       schedules.filter((s) => s.teamId === teamId).map((s) => s.memberId),
     );
-    return members.filter((member) => !takenInTeam.has(member.id));
-  }, [members, schedules, teamId]);
+    return rolePeople.filter((member) => !takenInTeam.has(member.id));
+  }, [rolePeople, schedules, teamId]);
 
+  // Step 2: the positions of the chosen team.
   useEffect(() => {
     if (!currentChurch || !teamId) {
       setRoles([]);
@@ -132,6 +128,20 @@ export default function EventDetailScreen() {
       .then(setRoles)
       .catch(() => setRoles([]));
   }, [currentChurch, teamId]);
+
+  // Step 3: only the people who cover the chosen position.
+  useEffect(() => {
+    if (!currentChurch || !teamId || !teamRoleId) {
+      setRolePeople([]);
+      return;
+    }
+    teamsService
+      .listRoleMembers(currentChurch.id, teamId, teamRoleId)
+      .then((entries) =>
+        setRolePeople(entries.map((entry) => entry.member).filter((person): person is Member => Boolean(person))),
+      )
+      .catch(() => setRolePeople([]));
+  }, [currentChurch, teamId, teamRoleId]);
 
   const openOccurrences = async () => {
     if (!currentChurch || !eventId) return;
@@ -286,6 +296,12 @@ export default function EventDetailScreen() {
     setTeamId(null);
     setMemberId(null);
     setTeamRoleId(null);
+  };
+
+  /** With a single team to choose from there is nothing to pick: start on step 2. */
+  const openManualForm = () => {
+    if (ledTeams.length === 1) setTeamId(ledTeams[0].id);
+    setFormOpen(true);
   };
 
   const handleAssign = async () => {
@@ -463,7 +479,7 @@ export default function EventDetailScreen() {
       />
 
       {canManage ? (
-        <FAB icon="account-plus" style={[styles.fab, { bottom: clearance || spacing.lg }]} onPress={() => setFormOpen(true)} />
+        <FAB icon="account-plus" style={[styles.fab, { bottom: clearance || spacing.lg }]} onPress={openManualForm} />
       ) : null}
 
       {/* Auto-schedule: leader picks which roles to fill */}
@@ -580,27 +596,36 @@ export default function EventDetailScreen() {
             setMemberId(null);
             setTeamRoleId(null);
           }}
-          options={teams.map((team) => ({ value: team.id, label: team.name }))}
-          emptyMessage="Crie uma equipe primeiro"
+          options={ledTeams.map((team) => ({ value: team.id, label: team.name }))}
+          emptyMessage="Você não lidera nenhuma equipe"
         />
 
         <SelectField
           label="Função"
           value={teamRoleId}
-          onSelect={setTeamRoleId}
+          onSelect={(value) => {
+            setTeamRoleId(value);
+            setMemberId(null);
+          }}
           options={roles.map((role) => ({ value: role.id, label: role.name }))}
           emptyMessage={teamId ? 'Esta equipe ainda não tem funções' : 'Escolha a equipe antes'}
         />
 
         <SelectField
-          label="Membro"
+          label="Pessoa"
           value={memberId}
           onSelect={setMemberId}
           options={availableMembers.map((member) => ({
             value: member.id,
             label: member.fullName,
           }))}
-          emptyMessage={teamId ? 'Todos já escalados nesta equipe' : 'Escolha a equipe antes'}
+          emptyMessage={
+            !teamRoleId
+              ? 'Escolha a função antes'
+              : rolePeople.length === 0
+                ? 'Ninguém da equipe cobre esta função'
+                : 'Todos já escalados nesta função'
+          }
         />
       </Sheet>
 

@@ -1,6 +1,7 @@
 import type { JwtUser } from '../../../common/interfaces';
 import type { AssignTeamRoleDto } from '../dtos/assign-team-role.dto';
 import type { CreateTeamRoleDto } from '../dtos/create-team-role.dto';
+import type { TeamMemberResponseDto } from '../dtos/team-member-response.dto';
 import type { TeamMemberRoleResponseDto } from '../dtos/team-member-role-response.dto';
 import type { TeamRoleResponseDto } from '../dtos/team-role-response.dto';
 import type { UpdateTeamRoleDto } from '../dtos/update-team-role.dto';
@@ -9,6 +10,7 @@ export interface ITeamRolesService {
   create(createTeamRoleDto: CreateTeamRoleDto, user: JwtUser): Promise<TeamRoleResponseDto>;
   findByTeam(teamId: string): Promise<TeamRoleResponseDto[]>;
   findOne(teamId: string, roleId: string): Promise<TeamRoleResponseDto>;
+  findMembersCoveringRole(teamId: string, roleId: string): Promise<TeamMemberResponseDto[]>;
   update(
     teamId: string,
     roleId: string,
