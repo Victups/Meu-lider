@@ -6,14 +6,12 @@
     "scheme": "igreja-escala",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.igrejaescala.app"
     },
     "android": {
       "package": "com.igrejaescala.app",
-      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#381636"
