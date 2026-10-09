@@ -1,4 +1,4 @@
-# Domain Model - Igreja Escala
+# Domain Model - Meu Líder
 
 ## Overview
 Sistema de escalas para igrejas. Gerencia quem faz o quê, em qual evento, com confirmação e disponibilidade.

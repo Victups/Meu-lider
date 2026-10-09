@@ -29,7 +29,7 @@ export const CONFIG_DEFAULTS = {
   DB_PASSWORD: 'postgres',
   DB_NAME: 'igreja_escala',
   APP_TIMEZONE: 'America/Sao_Paulo',
-  MAIL_FROM: 'Igreja Escala <no-reply@igrejaescala.app>',
+  MAIL_FROM: 'Meu Líder <no-reply@igrejaescala.app>',
 } as const;
 
 export const PRODUCTION_ENV = 'production';

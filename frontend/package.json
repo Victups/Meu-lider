@@ -1,7 +1,7 @@
 {
   "name": "igreja-escala-mobile",
   "version": "0.1.0",
-  "description": "Igreja Escala - Church scheduling app for iOS, Android and Web",
+  "description": "Meu Líder - Church scheduling app for iOS, Android and Web",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",

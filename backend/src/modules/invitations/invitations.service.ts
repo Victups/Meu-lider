@@ -197,7 +197,7 @@ export class InvitationsService {
     return [
       `Você foi convidado(a) para servir ${where}! 🙌`,
       '',
-      'Baixe o app *Igreja Escala*, toque em *Criar conta* e use o código:',
+      'Baixe o app *Meu Líder*, toque em *Criar conta* e use o código:',
       `*${invitation.code}*`,
       '',
       `Vale até ${formatShortDate(invitation.expiresAt)}.`,

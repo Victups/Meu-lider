@@ -52,7 +52,7 @@ export default function LoginScreen() {
           <View style={[styles.mark, { backgroundColor: theme.colors.primary }]}>
             <Ionicons name="calendar-clear" size={28} color={theme.colors.onPrimary} />
           </View>
-          <Text style={[styles.title, { color: theme.app.text }]}>Igreja Escala</Text>
+          <Text style={[styles.title, { color: theme.app.text }]}>Meu Líder</Text>
           <Text style={[styles.subtitle, { color: theme.app.textMuted }]}>
             Organize as escalas da sua igreja em um só lugar
           </Text>

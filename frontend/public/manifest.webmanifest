@@ -1,6 +1,6 @@
 {
-  "name": "Igreja Escala",
-  "short_name": "Escala",
+  "name": "Meu Líder",
+  "short_name": "Meu Líder",
   "description": "Escalas de serviço da igreja",
   "start_url": "/",
   "scope": "/",

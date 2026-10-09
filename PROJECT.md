@@ -1,10 +1,10 @@
-# Igreja Escala - Project Documentation
+# Meu Líder - Project Documentation
 
 A professional church scheduling system with web and mobile apps.
 
 ## Project Overview
 
-**Igreja Escala** is a complete scheduling solution for churches. It allows churches to manage teams, create events, and assign members to specific functions with a confirmation workflow.
+**Meu Líder** is a complete scheduling solution for churches. It allows churches to manage teams, create events, and assign members to specific functions with a confirmation workflow.
 
 ### Problem Solved
 Churches struggle to manually coordinate who should do what, when. This system automates scheduling, confirmations, and availability tracking.

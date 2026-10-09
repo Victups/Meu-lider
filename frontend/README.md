@@ -1,4 +1,4 @@
-# Igreja Escala - Mobile App
+# Meu Líder - Mobile App
 
 Universal React Native + Expo app for iOS, Android, and Web.
 

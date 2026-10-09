@@ -1,4 +1,4 @@
-# Igreja Escala - Backend API
+# Meu Líder - Backend API
 
 Professional church scheduling system backend built with NestJS and PostgreSQL.
 

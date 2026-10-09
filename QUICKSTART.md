@@ -1,6 +1,6 @@
 # 🚀 Quick Start Guide
 
-Get Igreja Escala running in 10 minutes.
+Get Meu Líder running in 10 minutes.
 
 ## Prerequisites
 
