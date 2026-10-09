@@ -17,6 +17,8 @@ export function buildTypeOrmOptions(configService: ConfigService): TypeOrmModule
     migrationsRun: true,
     migrations: [join(__dirname, '..', 'migrations', '*.{ts,js}')],
     logging: configService.get<string>(CONFIG_KEYS.DB_LOGGING) === 'true',
+    // Hosted Postgres (Neon, Supabase) refuses plain connections.
+    ssl: configService.get<string>(CONFIG_KEYS.DB_SSL) === 'true',
     // Entities come from the TypeOrmModule.forFeature() registrations, so no path globs
     // that would break once the app runs from dist/.
     autoLoadEntities: true,

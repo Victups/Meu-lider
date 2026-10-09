@@ -18,6 +18,7 @@ const dataSourceOptions: DataSourceOptions = {
   database: process.env.DB_NAME ?? CONFIG_DEFAULTS.DB_NAME,
   synchronize: false,
   logging: process.env.DB_LOGGING === 'true',
+  ssl: process.env.DB_SSL === 'true',
   entities: ['src/**/*.entity.ts'],
   migrations: ['src/migrations/*.ts'],
   subscribers: ['src/subscribers/**/*.ts'],
